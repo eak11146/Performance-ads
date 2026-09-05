@@ -82,7 +82,7 @@ export default function ProjectsPage() {
       <main className="px-5 py-12 lg:px-8">
       <div className="mx-auto max-w-6xl">
         <div className="mb-10 flex flex-col justify-between gap-4 border-b border-slate-300 pb-8 sm:flex-row sm:items-end">
-          <div><Link href="/" className="text-lg font-semibold tracking-tight">fieldnotes<span className="text-orange-600">.</span></Link><p className="mt-8 text-xs font-semibold uppercase tracking-[0.2em] text-orange-700">MongoDB CRUD test</p><h1 className="mt-3 text-4xl font-semibold tracking-tight">Projects</h1><p className="mt-3 text-slate-600">Create, read, update, and delete records from the database.</p></div>
+          <div><p className="mt-8 text-xs font-semibold uppercase tracking-[0.2em] text-orange-700">MongoDB CRUD test</p><h1 className="mt-3 text-4xl font-semibold tracking-tight">Projects</h1><p className="mt-3 text-slate-600">Create, read, update, and delete records from the database.</p></div>
           <Link href="/dashboard" className="text-sm font-medium text-slate-600 underline underline-offset-4">Back to dashboard</Link>
         </div>
 

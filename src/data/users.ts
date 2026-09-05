@@ -8,14 +8,14 @@ export type DemoUser = {
 
 export const demoUsers: DemoUser[] = [
   {
-    email: "demo@fieldnotes.local",
+    email: "demo@performance.local",
     password: "demo1234",
     name: "Mina Park",
     role: "Product designer",
     initials: "MP",
   },
   {
-    email: "admin@fieldnotes.local",
+    email: "admin@performance.local",
     password: "admin1234",
     name: "Theo James",
     role: "Workspace admin",

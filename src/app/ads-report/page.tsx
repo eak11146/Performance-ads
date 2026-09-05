@@ -25,10 +25,6 @@ function getColumns(rows: ReportRow[]) {
   );
 }
 
-function isProductColumn(column: string) {
-  return column === "สินค้า" || column.toLowerCase() === "product";
-}
-
 function isDateColumn(column: string) {
   const normalized = column.toLowerCase().replace(/[\s_\-./]/g, "");
   return normalized === "date" || normalized === "วันที่";
@@ -78,7 +74,6 @@ export default function AdsReportPage() {
   const [isAuthorized, setIsAuthorized] = useState(false);
   const [rows, setRows] = useState<ReportRow[]>([]);
   const [reports, setReports] = useState<ReportRow[]>([]);
-  const [groupColumn, setGroupColumn] = useState("");
   const [fileName, setFileName] = useState("");
   const [message, setMessage] = useState(
     "Upload Excel เพื่อเริ่มวิเคราะห์รายงาน Ads",
@@ -86,6 +81,8 @@ export default function AdsReportPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingRow, setEditingRow] = useState<ReportRow>({});
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [reportPageSize, setReportPageSize] = useState(5);
+  const [reportPages, setReportPages] = useState<Record<string, number>>({});
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -100,10 +97,6 @@ export default function AdsReportPage() {
           const data = await response.json();
           if (response.ok) {
             setReports(data);
-            const loadedColumns = getColumns(data);
-            setGroupColumn(
-              loadedColumns.find(isProductColumn) || loadedColumns[0] || "",
-            );
           }
         })
         .catch(() => setMessage("ไม่สามารถโหลดรายงานได้"));
@@ -119,10 +112,6 @@ export default function AdsReportPage() {
       const sheet = workbook.Sheets[workbook.SheetNames[0]];
       const parsed = parseReportSheet(sheet);
       setRows(parsed);
-      const importedColumns = getColumns(parsed);
-      setGroupColumn(
-        importedColumns.find(isProductColumn) || importedColumns[0] || "",
-      );
       setFileName(file.name);
       setMessage(
         `${parsed.length} แถวพร้อม preview แล้ว ตรวจสอบก่อนนำเข้า database`,
@@ -148,6 +137,7 @@ export default function AdsReportPage() {
       result.json(),
     );
     setReports(refreshed);
+    setReportPages({});
     setRows([]);
     setMessage(`นำเข้า ${data.imported} แถวสำเร็จ และแปลงคอลัมน์ date เป็น Date แล้ว`);
   }
@@ -193,6 +183,7 @@ export default function AdsReportPage() {
       current.filter((report) => !validIds.includes(report._id || "")),
     );
     setSelectedIds((current) => current.filter((id) => !validIds.includes(id)));
+    setReportPages({});
     setMessage(`ลบ ${data.deleted} แถวสำเร็จ`);
   }
 
@@ -200,21 +191,22 @@ export default function AdsReportPage() {
   const savedIds = reports
     .map((report) => report._id)
     .filter((id): id is string => Boolean(id));
-  const groupedReports = reports.reduce<Record<string, ReportRow[]>>(
-    (result, report) => {
-      const group = report[groupColumn] || "ไม่ระบุ";
-      result[group] = result[group] || [];
-      result[group].push(report);
-      return result;
-    },
-    {},
-  );
+  const groupedReports: Record<string, ReportRow[]> = { "วิเคราะห์ KOL": reports };
   function toggleSelected(id: string) {
     setSelectedIds((current) =>
       current.includes(id)
         ? current.filter((selectedId) => selectedId !== id)
         : [...current, id],
     );
+  }
+
+  function getGroupPage(group: string) {
+    return reportPages[group] || 1;
+  }
+
+  function getVisibleGroupReports(group: string, groupReports: ReportRow[]) {
+    const page = getGroupPage(group);
+    return groupReports.slice((page - 1) * reportPageSize, page * reportPageSize);
   }
 
   function renderValue(report: ReportRow, column: string) {
@@ -257,11 +249,8 @@ export default function AdsReportPage() {
       <div className="mx-auto max-w-7xl">
         <div className="mb-8 flex flex-col justify-between gap-4 border-b border-zinc-300 pb-8 sm:mb-10 sm:flex-row sm:items-end dark:border-zinc-700">
           <div>
-            <Link href="/" className="text-lg font-semibold tracking-tight">
-              fieldnotes<span className="text-orange-600">.</span>
-            </Link>
             <p className="mt-8 text-xs font-semibold uppercase tracking-[0.2em] text-orange-700">
-              Google Ads intelligence
+              Google Ads reporting
             </p>
             <h1 className="mt-3 text-3xl font-semibold tracking-tight sm:text-4xl">
               Ads report
@@ -354,25 +343,10 @@ export default function AdsReportPage() {
                 id="saved-reports-heading"
                 className="mt-2 text-2xl font-semibold"
               >
-                Reports grouped by column
+                วิเคราะห์ KOL
               </h2>
             </div>
             <div className="flex flex-wrap items-center gap-3">
-              <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">
-                จัดกลุ่มด้วย
-                <select
-                  className="ml-2 max-w-[180px] rounded-lg border border-zinc-300 bg-white px-3 py-2 dark:border-zinc-600 dark:bg-zinc-800"
-                  value={groupColumn}
-                  onChange={(event) => setGroupColumn(event.target.value)}
-                >
-                  <option value="">ไม่จัดกลุ่ม</option>
-                  {columns.map((column) => (
-                    <option key={column} value={column}>
-                      {column}
-                    </option>
-                  ))}
-                </select>
-              </label>
               {selectedIds.length > 0 && (
                 <button
                   onClick={() =>
@@ -395,6 +369,21 @@ export default function AdsReportPage() {
               >
                 ลบทั้งหมด
               </button>
+              <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">
+                Rows/page
+                <select
+                  className="ml-2 rounded-lg border border-zinc-300 bg-white px-3 py-2 dark:border-zinc-600 dark:bg-zinc-800"
+                  value={reportPageSize}
+                  onChange={(event) => {
+                    setReportPageSize(Number(event.target.value));
+                    setReportPages({});
+                  }}
+                >
+                  <option value={5}>5</option>
+                  <option value={10}>10</option>
+                  <option value={20}>20</option>
+                </select>
+              </label>
             </div>
           </div>
           {Object.entries(groupedReports).map(([group, groupReports]) => (
@@ -403,7 +392,7 @@ export default function AdsReportPage() {
               key={group}
             >
               <div className="flex items-center justify-between border-b border-zinc-200 bg-zinc-50 px-5 py-4 dark:border-zinc-700 dark:bg-zinc-800 sm:px-6">
-                <h3 className="font-semibold">{group}</h3>
+                <h3 className="font-semibold">วิเคราะห์ KOL</h3>
                 <span className="text-sm text-zinc-500 dark:text-zinc-400">
                   {groupReports.length} rows
                 </span>
@@ -443,7 +432,7 @@ export default function AdsReportPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {groupReports.map((report, index) => (
+                    {getVisibleGroupReports(group, groupReports).map((report, index) => (
                       <tr
                         className="border-t border-zinc-200 dark:border-zinc-700"
                         key={`${group}-${report._id || index}`}
@@ -457,7 +446,7 @@ export default function AdsReportPage() {
                             onChange={() =>
                               report._id && toggleSelected(report._id)
                             }
-                            aria-label={`เลือก ${report[groupColumn] || "รายงาน"}`}
+                            aria-label="เลือกแถวรายงาน"
                           />
                         </td>
                         {columns.map((column) => (
@@ -515,7 +504,7 @@ export default function AdsReportPage() {
                 </table>
               </div>
               <div className="space-y-3 p-4 md:hidden">
-                {groupReports.map((report, index) => (
+                {getVisibleGroupReports(group, groupReports).map((report, index) => (
                   <article
                     className="rounded-xl border border-zinc-200 p-4 dark:border-zinc-700"
                     key={`${group}-mobile-${report._id || index}`}
@@ -591,6 +580,25 @@ export default function AdsReportPage() {
                   </article>
                 ))}
               </div>
+              {groupReports.length > reportPageSize && (
+                <div className="flex items-center justify-between border-t border-zinc-200 px-5 py-3 text-sm dark:border-zinc-700">
+                  <span className="text-xs text-zinc-500 dark:text-zinc-400">
+                    Page {getGroupPage(group)} of {Math.ceil(groupReports.length / reportPageSize)} · {groupReports.length} rows
+                  </span>
+                  <div className="flex gap-2">
+                    <button
+                      className="rounded-md border border-zinc-300 px-3 py-1.5 text-xs disabled:cursor-not-allowed disabled:opacity-40 dark:border-zinc-600"
+                      disabled={getGroupPage(group) === 1}
+                      onClick={() => setReportPages((current) => ({ ...current, [group]: getGroupPage(group) - 1 }))}
+                    >Previous</button>
+                    <button
+                      className="rounded-md border border-zinc-300 px-3 py-1.5 text-xs disabled:cursor-not-allowed disabled:opacity-40 dark:border-zinc-600"
+                      disabled={getGroupPage(group) >= Math.ceil(groupReports.length / reportPageSize)}
+                      onClick={() => setReportPages((current) => ({ ...current, [group]: getGroupPage(group) + 1 }))}
+                    >Next</button>
+                  </div>
+                </div>
+              )}
             </div>
           ))}
           {!reports.length && (

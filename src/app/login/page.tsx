@@ -1,13 +1,12 @@
 "use client";
 
 import { FormEvent, useEffect, useState } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import TopMenu from "@/components/top-menu";
 
 export default function LoginPage() {
   const router = useRouter();
-  const [email, setEmail] = useState("demo@fieldnotes.local");
+  const [email, setEmail] = useState("admin@performance.local");
   const [password, setPassword] = useState("demo1234");
   const [error, setError] = useState("");
 
@@ -38,9 +37,6 @@ export default function LoginPage() {
       <main className="flex min-h-[calc(100vh-73px)] items-center justify-center px-5 py-12">
       <section className="w-full max-w-md rounded-3xl border border-slate-200 bg-white p-7 shadow-[0_20px_60px_rgba(15,23,42,0.08)] sm:p-10">
         <div className="mb-10">
-          <Link href="/" className="text-lg font-semibold tracking-tight">
-            fieldnotes<span className="text-orange-600">.</span>
-          </Link>
           <p className="mt-10 text-xs font-semibold uppercase tracking-[0.2em] text-orange-700">Welcome back</p>
           <h1 className="mt-3 text-3xl font-semibold tracking-tight">Sign in to your workspace</h1>
           <p className="mt-3 text-sm leading-6 text-slate-500">Use a local demo account to preview the dashboard.</p>
