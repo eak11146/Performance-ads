@@ -452,12 +452,12 @@ export default function HomeClient() {
       <TopMenu user={user} />
       <main className="mx-auto max-w-7xl px-5 py-10 lg:px-8 lg:py-14">
         <div className="mb-8">
-          <p className="mb-3 text-xs font-semibold uppercase tracking-[0.2em] text-[#c8102e]">
+           {/* <p className="mb-3 text-xs font-semibold uppercase tracking-[0.2em] text-[#c8102e]">
             Performance Reporting / Executive Summary
-          </p>
+          </p>   */}
           <h1 className="text-4xl font-semibold tracking-tight sm:text-5xl">Overview</h1>
           <p className="mt-3 max-w-xl text-sm leading-6 text-zinc-500 dark:text-zinc-400">
-            ภาพรวมโฆษณาที่ทำผลงานดีที่สุด เชื่อมโยงข้อมูลแคมเปญและการวิเคราะห์ Ads ราย KOL
+            ภาพรวมโฆษณาที่ทำผลงานดีที่สุด ข้อมูลแคมเปญและการวิเคราะห์ Ads ราย KOL
           </p>
         </div>
 
