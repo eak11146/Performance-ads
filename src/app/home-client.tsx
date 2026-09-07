@@ -313,20 +313,32 @@ export default function HomeClient() {
   useEffect(() => {
     document.documentElement.classList.toggle("dark", window.localStorage.getItem("performance-theme") === "dark");
     const timer = window.setTimeout(() => {
-      fetch("/api/auth")
-        .then(async (response) => {
-          if (!response.ok) return;
-          const auth = (await response.json()) as { user?: DemoUser };
-          if (!auth.user) return;
-          setUser(auth.user);
-          const [reportsResponse, campaignsResponse] = await Promise.all([
-            fetch("/api/ad-reports"),
-            fetch("/api/campaigns"),
+      Promise.all([
+        fetch("/api/auth", { cache: "no-store" }),
+        fetch("/api/ad-reports", { cache: "no-store" }),
+        fetch("/api/campaigns", { cache: "no-store" }),
+      ])
+        .then(async ([authResponse, reportsResponse, campaignsResponse]) => {
+          const [authData, reportsData, campaignsData] = await Promise.all([
+            authResponse.json(),
+            reportsResponse.json(),
+            campaignsResponse.json(),
           ]);
-          const reportsData = await reportsResponse.json();
-          const campaignsData = await campaignsResponse.json();
-          if (reportsResponse.ok && Array.isArray(reportsData)) setReports(reportsData);
-          if (campaignsResponse.ok && Array.isArray(campaignsData)) setCampaigns(campaignsData);
+
+          if (authResponse.ok) {
+            const auth = authData as { user?: DemoUser };
+            setUser(auth.user ?? null);
+          }
+
+          if (reportsResponse.ok && Array.isArray(reportsData)) {
+            setReports(reportsData);
+          } else {
+            setError("Unable to load ad_reports.");
+          }
+
+          if (campaignsResponse.ok && Array.isArray(campaignsData)) {
+            setCampaigns(campaignsData);
+          }
         })
         .catch((loadError: Error) => setError(loadError.message))
         .finally(() => setIsLoading(false));

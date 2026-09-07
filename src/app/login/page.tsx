@@ -7,7 +7,7 @@ import TopMenu from "@/components/top-menu";
 export default function LoginPage() {
   const router = useRouter();
   const [email, setEmail] = useState("admin@performance.local");
-  const [password, setPassword] = useState("demo1234");
+  const [password, setPassword] = useState("PerformanceAdmin123!");
   const [error, setError] = useState("");
 
   useEffect(() => {
