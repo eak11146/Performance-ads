@@ -731,11 +731,11 @@ export default function HomeClient() {
                     <dd className="mt-1 font-semibold">{activeAd.product}</dd>
                   </div>
                   <div className="rounded-lg bg-zinc-50 p-3 sm:col-span-2 dark:bg-zinc-800/60">
-                    <dt className="text-xs text-zinc-500 dark:text-zinc-400">Campaign (จากหน้า Campaign)</dt>
+                    <dt className="text-xs text-zinc-500 dark:text-zinc-400">Campaign</dt>
                     <dd className="mt-1 font-semibold text-[#c8102e]">{activeAd.campaign}</dd>
                   </div>
                   <div className="rounded-lg bg-zinc-50 p-3 sm:col-span-2 dark:bg-zinc-800/60">
-                    <dt className="text-xs text-zinc-500 dark:text-zinc-400">Creator (จากหน้า Ads Report)</dt>
+                    <dt className="text-xs text-zinc-500 dark:text-zinc-400">Creator</dt>
                     <dd className="mt-1 font-semibold">{activeAd.creator}</dd>
                   </div>
                 </dl>
@@ -780,21 +780,7 @@ export default function HomeClient() {
               </div>
             </div>
 
-            {/* <div className="mt-7 space-y-3">
-              <div className="rounded-xl border-l-4 border-[#c8102e] bg-zinc-50 p-4 text-sm leading-6 dark:bg-zinc-800">
-                <p className="text-xs font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
-                  Why it stands out (จาก Ads Report)
-                </p>
-                <p className="mt-2 font-medium">{activeAd.insight}</p>
-              </div>
-
-              {activeAd.action && (
-                <div className="flex items-start gap-3 rounded-xl border border-emerald-200 bg-emerald-50/60 p-4 text-sm dark:border-emerald-900/50 dark:bg-emerald-950/20">
-                  <span className="rounded bg-emerald-600 px-2 py-0.5 text-xs font-bold text-white">Action</span>
-                  <p className="text-emerald-900 dark:text-emerald-300">{activeAd.action}</p>
-                </div>
-              )}
-            </div> */}
+            
 
             <div className="mt-8 flex flex-wrap items-center justify-center gap-2">
               {carouselItems.map((ad, index) => (
