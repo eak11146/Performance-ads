@@ -57,7 +57,7 @@ function isCampaignRow(row: Record<string, unknown>) {
 export async function GET() {
   try {
     const rows = await (await getCollection()).find({}).sort({ createdAt: -1 }).toArray();
-    return NextResponse.json(rows.map((row) => Object.fromEntries(Object.entries(row).filter(([field]) => field !== "createdAt" && field !== "updatedAt"))));
+    return NextResponse.json(rows.map((row) => Object.fromEntries(Object.entries(row).filter(([field]) => field !== "updatedAt"))));
   } catch (error) {
     console.error("GET /api/campaigns failed", error);
     return NextResponse.json({ error: "Unable to load campaigns" }, { status: 500 });
