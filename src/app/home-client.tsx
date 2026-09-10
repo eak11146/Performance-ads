@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { Chart as ChartJS, ArcElement, CategoryScale, Filler, Legend, LineElement, LinearScale, PointElement, Tooltip } from "chart.js";
+import { Doughnut, Line } from "react-chartjs-2";
 import type { DemoUser } from "@/data/users";
 import TopMenu from "@/components/top-menu";
 import {
@@ -19,11 +21,15 @@ import {
   Sparkles,
   Target,
   TrendingDown,
+  TrendingUp,
   WalletCards,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
+ChartJS.register(ArcElement, CategoryScale, Filler, Legend, LineElement, LinearScale, PointElement, Tooltip);
+
 type DataRow = Record<string, string | number> & { _id?: string; createdAt?: string };
+type SeoDataRow = { _id?: string; date: string; site: string; keyword: string; clicks: number; impressions: number; ctr: number; position: number };
 
 type CarouselAdItem = {
   id: string;
@@ -307,6 +313,9 @@ export default function HomeClient() {
   const [error, setError] = useState("");
   const [reports, setReports] = useState<DataRow[]>([]);
   const [campaigns, setCampaigns] = useState<DataRow[]>([]);
+  const [seoRows, setSeoRows] = useState<SeoDataRow[]>([]);
+  const [seoSite, setSeoSite] = useState("all");
+  const [seoPeriod, setSeoPeriod] = useState<7 | 15 | 30>(30);
   const [period, setPeriod] = useState<7 | 14 | 28>(28);
   const [carouselIndex, setCarouselIndex] = useState(0);
 
@@ -317,12 +326,14 @@ export default function HomeClient() {
         fetch("/api/auth", { cache: "no-store" }),
         fetch("/api/ad-reports", { cache: "no-store" }),
         fetch("/api/campaigns", { cache: "no-store" }),
+        fetch("/api/seo-data", { cache: "no-store" }),
       ])
-        .then(async ([authResponse, reportsResponse, campaignsResponse]) => {
-          const [authData, reportsData, campaignsData] = await Promise.all([
+        .then(async ([authResponse, reportsResponse, campaignsResponse, seoResponse]) => {
+          const [authData, reportsData, campaignsData, seoData] = await Promise.all([
             authResponse.json(),
             reportsResponse.json(),
             campaignsResponse.json(),
+            seoResponse.json(),
           ]);
 
           if (authResponse.ok) {
@@ -339,12 +350,28 @@ export default function HomeClient() {
           if (campaignsResponse.ok && Array.isArray(campaignsData)) {
             setCampaigns(campaignsData);
           }
+          if (seoResponse.ok && Array.isArray(seoData)) setSeoRows(seoData);
         })
         .catch((loadError: Error) => setError(loadError.message))
         .finally(() => setIsLoading(false));
     }, 0);
     return () => window.clearTimeout(timer);
   }, []);
+
+  const seoSites = useMemo(() => Array.from(new Set(seoRows.map((row) => row.site))).sort(), [seoRows]);
+  const seoSummary = useMemo(() => {
+    const scoped = seoRows.filter((row) => seoSite === "all" || row.site === seoSite);
+    const latest = scoped.reduce((max, row) => Math.max(max, new Date(row.date).getTime() || 0), 0);
+    const cutoff = latest - (seoPeriod - 1) * 86400000;
+    const rows = scoped.filter((row) => !latest || new Date(row.date).getTime() >= cutoff);
+    const clicks = rows.reduce((sum, row) => sum + Number(row.clicks || 0), 0);
+    const impressions = rows.reduce((sum, row) => sum + Number(row.impressions || 0), 0);
+    const weightedPosition = rows.reduce((sum, row) => sum + Number(row.position || 0) * Math.max(Number(row.impressions || 0), 1), 0);
+    const positionWeight = rows.reduce((sum, row) => sum + Math.max(Number(row.impressions || 0), 1), 0);
+    const buckets = [3, 5, 10, 20].map((limit, index, values) => rows.filter((row) => row.position > (index ? values[index - 1] : 0) && row.position <= limit).length);
+    const chart = Array.from(new Set(rows.map((row) => row.date))).sort().slice(-8).map((date) => ({ date, position: (() => { const items = rows.filter((row) => row.date === date); const weight = items.reduce((sum, row) => sum + Math.max(row.impressions || 0, 1), 0); return weight ? items.reduce((sum, row) => sum + row.position * Math.max(row.impressions || 0, 1), 0) / weight : 0; })() }));
+    return { rows, clicks, impressions, ctr: impressions ? (clicks / impressions) * 100 : 0, position: positionWeight ? weightedPosition / positionWeight : 0, buckets, chart };
+  }, [seoRows, seoSite, seoPeriod]);
 
   const campaignRowsWithDate = useMemo(() => {
     return campaigns
@@ -1060,6 +1087,59 @@ export default function HomeClient() {
             </div>
           </div>
         </section>
+                {/* row2   */}
+
+
+                    {/* seo section */}
+                        <section className=" mt-8 grid gap-6 lg:grid-cols-2">
+
+                          {/* Average Position */}
+                          <div className="flex flex-col justify-between rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-700 dark:bg-zinc-900">
+                            <div className="flex items-center justify-between border-b border-zinc-100 pb-4 dark:border-zinc-800">
+                              <div>
+                                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#c8102e]">
+                                  Seo Insights
+                                </p>
+                                <h2 className="mt-1 text-xl font-bold">Organic performance</h2>
+                              </div>
+                              {/* ค่าเฉลียน คะแนน seo แบบ graph ขึ้นลงเป็นเดือน */}
+                              <div className="flex items-center gap-1.5 rounded-full bg-red-50 px-3 py-1 text-xs font-semibold text-emerald-600 dark:bg-red-950/40">
+                                 <TrendingUp size={14}/>
+                                <span>{seoPeriod}-day view</span>
+                              </div>
+
+                          <div className="grid grid-cols-2 gap-3 pt-5 sm:grid-cols-4">
+                            <div><p className="text-xs text-zinc-500">Clicks</p><p className="mt-1 text-lg font-bold">{formatCompact(seoSummary.clicks)}</p></div>
+                            <div><p className="text-xs text-zinc-500">Impressions</p><p className="mt-1 text-lg font-bold">{formatCompact(seoSummary.impressions)}</p></div>
+                            <div><p className="text-xs text-zinc-500">CTR</p><p className="mt-1 text-lg font-bold">{seoSummary.ctr.toFixed(2)}%</p></div>
+                            <div><p className="text-xs text-zinc-500">Avg. position</p><p className="mt-1 text-lg font-bold">{seoSummary.position.toFixed(1)}</p></div>
+                            <div className="col-span-2 flex gap-2 sm:col-span-4"><select value={seoSite} onChange={(event) => setSeoSite(event.target.value)} className="rounded-lg border border-zinc-300 bg-white px-2 py-1.5 text-xs dark:border-zinc-600 dark:bg-zinc-800"><option value="all">All sites</option>{seoSites.map((site) => <option key={site} value={site}>{site}</option>)}</select>{[7, 15, 30].map((value) => <button key={value} onClick={() => setSeoPeriod(value as 7 | 15 | 30)} className={`rounded-lg px-2 py-1 text-xs ${seoPeriod === value ? "bg-[#c8102e] text-white" : "bg-zinc-100 dark:bg-zinc-800"}`}>{value}D</button>)}</div>
+                          </div>
+                          {seoSummary.chart.length > 0 && <div className="mt-5 h-48 border-t border-zinc-100 pt-4 dark:border-zinc-800"><Line data={{ labels: seoSummary.chart.map((point) => new Date(point.date).toLocaleDateString("en-GB", { day: "numeric", month: "short" })), datasets: [{ label: "Avg. position", data: seoSummary.chart.map((point) => point.position), borderColor: "#c8102e", backgroundColor: "rgba(200,16,46,.12)", fill: true, tension: .35, pointRadius: 3, pointBackgroundColor: "#c8102e" }] }} options={{ responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, tooltip: { callbacks: { label: (context) => ` Position: ${Number(context.raw).toFixed(1)}` } } }, scales: { x: { grid: { display: false }, ticks: { color: "#71717a" } }, y: { reverse: true, grid: { color: "rgba(113,113,122,.15)" }, ticks: { color: "#71717a" } } } }} /></div>}
+
+                            </div>
+                        </div>
+                         <div className="flex flex-col justify-between rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-700 dark:bg-zinc-900">
+                            <div className="flex items-center justify-between border-b border-zinc-100 pb-4 dark:border-zinc-800">
+                              <div>
+                                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#c8102e]">
+                                  Tracked Keywords
+                                </p>
+                                <h2 className="mt-1 text-xl font-bold">Ranking distribution</h2>
+                              </div>
+                              {/* ค่าเฉลีย คะแนน seo แบบ graph ขึ้นลงเป็นเดือน */}
+                              <div className="flex items-center gap-1.5 rounded-full bg-red-50 px-3 py-1 text-xs font-semibold text-emerald-600 dark:bg-red-950/40">
+                                <span>Top 3, 5, 10, 20</span>
+                                 {/* ทำ Pie graph จากการนับตำแน่งแบ่งเป็น 3, 5, 10, 20 ใช้ข้อมูลจาก seo-data */}
+                              </div>
+                            </div>
+                            {seoSummary.rows.length ? <div className="mt-5 flex items-center gap-5"><div className="h-52 w-52"><Doughnut data={{ labels: ["Top 3", "4–5", "6–10", "11–20"], datasets: [{ data: seoSummary.buckets, backgroundColor: ["#c8102e", "#ef4444", "#f59e0b", "#94a3b8"], borderWidth: 0, hoverOffset: 5 }] }} options={{ responsive: true, maintainAspectRatio: false, cutout: "62%", plugins: { legend: { display: false } } }} /></div><div className="space-y-3">{["Top 3", "4–5", "6–10", "11–20"].map((label, index) => <div key={label} className="flex items-center gap-2 text-sm"><span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: ["#c8102e", "#ef4444", "#f59e0b", "#94a3b8"][index] }} /><span className="text-zinc-500">{label}</span><strong>{seoSummary.buckets[index]}</strong></div>)}</div></div> : <p className="py-12 text-center text-sm text-zinc-500">Upload SEO data to see keyword positions.</p>}
+                        </div>
+                  </section>
+
+
+
+
       </main>
     </div>
   );
