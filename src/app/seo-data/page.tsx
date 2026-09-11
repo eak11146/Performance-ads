@@ -703,7 +703,7 @@ export default function SeoDataPage() {
                     }
                     className="mt-1 w-full rounded-lg border border-zinc-300 p-2 dark:border-zinc-700 dark:bg-zinc-800">
                   <option value="zmithailland">Zmithailland</option>
-                  <option value="T=thaisuperphone" >Thaisuperphone</option>
+                  <option value="thaisuperphone" >Thaisuperphone</option>
                   <option value="imilabthailand" >Imilabthailand</option>
                    <option value="isuper">Isuper</option>   
                 </select>
