@@ -136,7 +136,23 @@ export default function OverviewSeoSection({
       ? sorted.reduce((sum, item) => sum + Number(item?.ranking || 0), 0) / sorted.length
       : 0;
     const totalSales = sorted.reduce((sum, item) => sum + Number(item?.sales || 0), 0);
-    const totalArticles = sorted.reduce((sum, item) => sum + Number(item?.article || 0), 0);
+    //const totalArticles = sorted.reduce((sum, item) => sum + Number(item?.article || 0), 0);
+   /*  สาเหตุเกิดจากในข้อมูลของคุณ ค่าของ article บางแถวส่งมาเป็น string (เช่น "6", "12", หรือ "-") ทำให้เมื่อเรานำไปคำนวณด้วย .reduce() ผลลัพธ์ตัวแปร perfSummary.article จึงกลายเป็น String ไม่ใช่ Number และเมื่อสั่ง .toLocaleString() บน String โปรแกรมจึงโยน Error ออกมาครับ
+
+วิธีแก้ไข (ทำได้ 2 จุด)
+จุดที่ 1: ปรับปรุงการคำนวณ totalArticles ใน perfSummary ให้แปลงเป็น Number เสมอ
+ในไฟล์ components/overview-seo-section.tsx ตรงส่วนการคำนวณ perfSummary ให้เปลี่ยนบรรทัด totalArticles เป็นดังนี้ครับ: */
+
+ 
+
+// ✅ แก้ไขใหม่ (แปลงค่า string/number ให้เป็นตัวเลขที่ปลอดภัยเสมอ)
+const totalArticles = sorted.reduce((sum, item) => {
+  const val = typeof item.article === "number" 
+    ? item.article 
+    : parseFloat(String(item.article || "").replace(/[^0-9.-]/g, ""));
+  return sum + (Number.isFinite(val) ? val : 0);
+}, 0);
+
 
     return {
       clicks: totalClicks,
@@ -339,7 +355,13 @@ export default function OverviewSeoSection({
             </div>
             <div>
               <p className="text-[10px] text-zinc-500 uppercase">Articles</p>
-              <p className="mt-0.5 text-sm font-bold">{perfSummary.article.toLocaleString()}</p>
+             {/*  <p className="mt-0.5 text-sm font-bold">{perfSummary.article.toLocaleString()}</p> 
+             ปรับตรง JSX การแสดงผล ให้ปลอดภัย 100%
+ตรงจุดที่แสดงผล {perfSummary.article.toLocaleString()} ให้ใส่ตัวช่วยแปลงเป็น Number ก่อนเรียกฟังก์ชันครับ:
+             
+             */}
+             <p className="mt-0.5 text-sm font-bold">  {Number(perfSummary.article || 0).toLocaleString()}</p>
+              
             </div>
           </div>
 
