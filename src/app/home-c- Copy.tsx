@@ -4,21 +4,14 @@ import { useEffect, useMemo, useState } from "react";
 import { Chart as ChartJS, ArcElement, CategoryScale, Filler, Legend, LineElement, LinearScale, PointElement, Tooltip } from "chart.js";
 import { Doughnut, Line } from "react-chartjs-2";
 import type { DemoUser } from "@/data/users";
-import TopMenu from "@/components/top-menu"; 
-import OverviewSeoSection, {
-  PerformanceItem,
-  SeoDataItem,
-} from "@/components/overview-seo-section";
-
+import TopMenu from "@/components/top-menu";
 import {
   Award,
-  BarChart2,
   BarChart3,
   ChevronLeft,
   ChevronRight,
   CircleDollarSign,
   Eye,
-  Hash,
   Filter,
   Flame,
   Layers,
@@ -32,7 +25,7 @@ import {
   WalletCards,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
- 
+
 ChartJS.register(ArcElement, CategoryScale, Filler, Legend, LineElement, LinearScale, PointElement, Tooltip);
 
 type DataRow = Record<string, string | number> & { _id?: string; createdAt?: string };
@@ -231,7 +224,7 @@ function parseCampaignDate(row: DataRow): Date | null {
 function matchAdWithCampaigns(ad: DataRow, campaignRows: DataRow[]): DataRow[] {
   const product = readField(ad, ["products", "product", "สินค้า"]);
   const creator = readField(ad, ["Creator", "creator", "KOL", "kol"]);
-  const brand = readField(ad, ["brands", "brand", "แบรนด์", "แบรนด์สินค้า" ]);
+  const brand = readField(ad, ["brands", "brand", "แบรนด์", "แบรนด์สินค้า", "BIOKOOP"]);
 
   if (!product && !creator) return [];
 
@@ -314,105 +307,6 @@ function matchAdWithCampaigns(ad: DataRow, campaignRows: DataRow[]): DataRow[] {
   return valid.filter((v) => v.score >= maxScore - 2).map((v) => v.campaign);
 }
 
-/**
- * =========================================================================
- * ฟังก์ชันช่วยเหลือ (Helper Functions) สำหรับการจัดการและดึงข้อมูลให้สมบูรณ์โดยไม่เกิด Error
- * =========================================================================
- */
-
-/**
- * ฟังก์ชัน fetchJsonSafely:
- * ดึงข้อมูลจาก URL ปลายทางอย่างปลอดภัย (Safe Fetch)
- * - ตรวจสอบว่า HTTP response ทำงานถูกต้อง (res.ok) หรือไม่
- * - มี try/catch ดักจับข้อผิดพลาดระหว่างแปลง JSON เพื่อป้องกันกรณี Server คืนค่า HTML error (500/404)
- * - คืนค่า fallback เสมอหากเกิด error ทำให้ Application ไม่ crash หรือค้าง
- * 
- * @param url ลิงก์ API endpoint ที่ต้องการเรียก เช่น "/api/seo-data", "/api/performance"
- * @param fallback ค่าเริ่มต้นที่จะคืนกลับไปกรณีดึงข้อมูลล้มเหลว (เช่น [] หรือ null)
- */
-async function fetchJsonSafely<T>(url: string, fallback: T): Promise<T> {
-  try {
-    const res = await fetch(url, { cache: "no-store" });
-    if (!res.ok) {
-      console.warn(`[SafeFetch] เรียก API ${url} ล้มเหลวด้วยสถานะ HTTP ${res.status}`);
-      return fallback;
-    }
-    const data = await res.json();
-    return data ?? fallback;
-  } catch (err) {
-    console.error(`[SafeFetch] เกิดข้อผิดพลาดในการดึงข้อมูลจาก ${url}:`, err);
-    return fallback;
-  }
-}
-
-/**
- * ฟังก์ชัน sanitizeSeoData:
- * ตรวจสอบ ทำความสะอาด และจัดรูปแบบข้อมูลจากตาราง tb seo_data ให้สมบูรณ์ ปราศจาก error
- * - ตรวจสอบว่าอินพุตเป็น Array จริงหรือไม่ หากไม่ใช่จะคืนค่า []
- * - รองรับชื่อฟิลด์ทั้ง 'site' และ 'website'
- * - แปลงและตรวจสอบ 'position' หรือ 'ranking' ให้เป็นตัวเลขที่ถูกต้องเสมอ (หากแปลงไม่ได้ให้ fallback เป็น 0)
- * - ดึงและรักษาฟิลด์สำคัญเช่น keyword, clicks, impressions, ctr, date และ createdAt
- * 
- * @param raw ข้อมูลดิบที่ได้จาก API /api/seo-data (tb seo_data)
- * @returns Array ของ SeoDataItem ที่พร้อมส่งเข้า Component OverviewSeoSection โดยไม่ error
- */
-function sanitizeSeoData(raw: unknown): SeoDataItem[] {
-  if (!Array.isArray(raw)) return [];
-  return raw.map((item) => {
-    const obj = (item && typeof item === "object" ? item : {}) as Record<string, unknown>;
-    const site = String(obj.site || obj.website || "").trim();
-    const keyword = String(obj.keyword || "").trim();
-    const posRaw = obj.position ?? obj.ranking;
-    const posNum = Number(posRaw);
-    const position = Number.isFinite(posNum) ? posNum : 0;
-    const clicks = Number(obj.clicks) || 0;
-    const impressions = Number(obj.impressions) || 0;
-    const ctr = Number(obj.ctr) || 0;
-
-    return {
-      _id: obj._id ? String(obj._id) : undefined,
-      site,
-      website: site,
-      keyword,
-      position,
-      ranking: position,
-      date: obj.date ? String(obj.date) : undefined,
-      clicks,
-      impressions,
-      ctr,
-      createdAt: obj.createdAt ? String(obj.createdAt) : undefined,
-    };
-  });
-}
-
-/**
- * ฟังก์ชัน sanitizePerformanceData:
- * ตรวจสอบ ทำความสะอาด และแปลงข้อมูลจากตาราง tb performance ให้เข้ากับชนิด PerformanceItem
- * - ตรวจสอบว่าเป็น Array หรือไม่ หากไม่ใช่จะคืนค่า []
- * - ปรับค่าตัวเลขทั้งหมด (clicks, display, ctr, ranking, sales) ให้เป็นตัวเลขที่ปลอดภัย ไม่ติด NaN
- * - รองรับฟิลด์ month, website และ article พร้อม fallback ป้องกันหน้าจอแสดงผลผิดพลาด
- * 
- * @param raw ข้อมูลดิบที่ได้จาก API /api/performance (tb performance)
- * @returns Array ของ PerformanceItem ที่พร้อมแสดงผลใน OverviewSeoSection
- */
-function sanitizePerformanceData(raw: unknown): PerformanceItem[] {
-  if (!Array.isArray(raw)) return [];
-  return raw.map((item) => {
-    const obj = (item && typeof item === "object" ? item : {}) as Record<string, unknown>;
-    return {
-      _id: obj._id ? String(obj._id) : undefined,
-      month: String(obj.month || "").trim(),
-      website: String(obj.website || "").trim(),
-      clicks: Number(obj.clicks) || 0,
-      display: Number(obj.display) || 0,
-      ctr: Number(obj.ctr) || 0,
-      ranking: Number(obj.ranking) || 0,
-      sales: Number(obj.sales) || 0,
-      article: (obj.article as string | number) ?? "-",
-    };
-  });
-}
-
 export default function HomeClient() {
   const [user, setUser] = useState<DemoUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -425,51 +319,41 @@ export default function HomeClient() {
   const [period, setPeriod] = useState<7 | 14 | 28>(28);
   const [carouselIndex, setCarouselIndex] = useState(0);
 
-  // State สำหรับเก็บข้อมูลจาก tb performance และ tb seo_data สำหรับ OverviewSeoSection
-  const [performanceData, setPerformanceData] = useState<PerformanceItem[]>([]);
-  const [seoData, setSeoData] = useState<SeoDataItem[]>([]);
-
   useEffect(() => {
     document.documentElement.classList.toggle("dark", window.localStorage.getItem("performance-theme") === "dark");
-    const timer = window.setTimeout(async () => {
-      try {
-        // ดึงข้อมูลพร้อมกันทุก Endpoint อย่างปลอดภัย โดยครอบคลุมทั้ง tb seo_data และ tb performance
-        const [authData, reportsData, campaignsData, rawSeoData, rawPerformanceData] = await Promise.all([
-          fetchJsonSafely<{ user?: DemoUser }>("/api/auth", {}),
-          fetchJsonSafely<DataRow[]>("/api/ad-reports", []),
-          fetchJsonSafely<DataRow[]>("/api/campaigns", []),
-          fetchJsonSafely<unknown[]>("/api/seo-data", []),
-          fetchJsonSafely<unknown[]>("/api/performance", []),
-        ]);
+    const timer = window.setTimeout(() => {
+      Promise.all([
+        fetch("/api/auth", { cache: "no-store" }),
+        fetch("/api/ad-reports", { cache: "no-store" }),
+        fetch("/api/campaigns", { cache: "no-store" }),
+        fetch("/api/seo-data", { cache: "no-store" }),
+      ])
+        .then(async ([authResponse, reportsResponse, campaignsResponse, seoResponse]) => {
+          const [authData, reportsData, campaignsData, seoData] = await Promise.all([
+            authResponse.json(),
+            reportsResponse.json(),
+            campaignsResponse.json(),
+            seoResponse.json(),
+          ]);
 
-        if (authData.user) {
-          setUser(authData.user);
-        }
+          if (authResponse.ok) {
+            const auth = authData as { user?: DemoUser };
+            setUser(auth.user ?? null);
+          }
 
-        if (Array.isArray(reportsData) && reportsData.length > 0) {
-          setReports(reportsData);
-        } else {
-          setError("Unable to load ad_reports.");
-        }
+          if (reportsResponse.ok && Array.isArray(reportsData)) {
+            setReports(reportsData);
+          } else {
+            setError("Unable to load ad_reports.");
+          }
 
-        if (Array.isArray(campaignsData)) {
-          setCampaigns(campaignsData);
-        }
-
-        // นำข้อมูลจาก tb seo_data มาทำความสะอาดและจัดเตรียมก่อนส่งให้ OverviewSeoSection
-        const cleanedSeo = sanitizeSeoData(rawSeoData);
-        setSeoData(cleanedSeo);
-        setSeoRows(cleanedSeo as unknown as SeoDataRow[]);
-
-        // นำข้อมูลจาก tb performance มาทำความสะอาดและจัดเตรียมก่อนส่งให้ OverviewSeoSection
-        const cleanedPerf = sanitizePerformanceData(rawPerformanceData);
-        setPerformanceData(cleanedPerf);
-      } catch (loadError: unknown) {
-        const message = loadError instanceof Error ? loadError.message : String(loadError);
-        setError(message);
-      } finally {
-        setIsLoading(false);
-      }
+          if (campaignsResponse.ok && Array.isArray(campaignsData)) {
+            setCampaigns(campaignsData);
+          }
+          if (seoResponse.ok && Array.isArray(seoData)) setSeoRows(seoData);
+        })
+        .catch((loadError: Error) => setError(loadError.message))
+        .finally(() => setIsLoading(false));
     }, 0);
     return () => window.clearTimeout(timer);
   }, []);
@@ -1270,11 +1154,198 @@ const seoSummary = useMemo(() => {
 
 
      {/* seo section */}
-  <section className="mt-8 grid gap-6 ">
- <OverviewSeoSection 
-  performanceData={performanceData} 
-  seoData={seoData} 
-/>
+  <section className="mt-8 grid gap-6 lg:grid-cols-2">
+  {/* ---- การ์ดที่ 1: Average Position & SEO Stats ---- */}
+  <div className="flex flex-col justify-between rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-700 dark:bg-zinc-900">
+    <div className="flex items-center justify-between border-b border-zinc-100 pb-4 dark:border-zinc-800">
+      <div>
+        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#c8102e]">
+          Seo Insights
+        </p>
+        <h2 className="mt-1 text-xl font-bold">Organic performance</h2>
+      </div>
+
+      <div className="flex items-center gap-1.5 rounded-full bg-red-50 px-3 py-1 text-xs font-semibold text-[#c8102e] dark:bg-red-950/40">
+        <TrendingUp size={14} />
+        <span>{seoPeriod}-day view</span>
+      </div>
+    </div>
+
+    {/* ตัวกรอง Site และ ระยะเวลา (มีผลควบคุมทั้ง 2 กราฟพร้อมกัน) */}
+    <div className="mt-5 flex flex-wrap gap-2">
+      <select
+        value={seoSite}
+        onChange={(event) => setSeoSite(event.target.value)}
+        className="rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-xs font-medium dark:border-zinc-600 dark:bg-zinc-800"
+      >
+        <option value="all">All sites (ค่าเริ่มต้น)</option>
+        {seoSites.map((site) => (
+          <option key={site} value={site}>
+            {site}
+          </option>
+        ))}
+      </select>
+      <div className="flex gap-1">
+        {[7, 15, 30].map((value) => (
+          <button
+            key={value}
+            onClick={() => setSeoPeriod(value as 7 | 15 | 30)}
+            className={`rounded-lg px-3 py-1.5 text-xs font-medium transition ${
+              seoPeriod === value
+                ? "bg-[#c8102e] text-white"
+                : "bg-zinc-100 text-zinc-600 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700"
+            }`}
+          >
+            {value}D
+          </button>
+        ))}
+      </div>
+    </div>
+
+    <div className="grid grid-cols-2 gap-3 pt-5 sm:grid-cols-4">
+      <div>
+        <p className="text-xs text-zinc-500">Clicks</p>
+        <p className="mt-1 text-lg font-bold">{formatCompact(seoSummary.clicks)}</p>
+      </div>
+      <div>
+        <p className="text-xs text-zinc-500">Impressions</p>
+        <p className="mt-1 text-lg font-bold">{formatCompact(seoSummary.impressions)}</p>
+      </div>
+      <div>
+        <p className="text-xs text-zinc-500">CTR</p>
+        <p className="mt-1 text-lg font-bold">{seoSummary.ctr.toFixed(2)}%</p>
+      </div>
+      <div>
+        <p className="text-xs text-zinc-500">Avg. position</p>
+        <p className="mt-1 text-lg font-bold">{seoSummary.position.toFixed(1)}</p>
+      </div>
+    </div>
+
+    {seoSummary.chart.length > 0 && (
+      <div className="mt-5 h-48 border-t border-zinc-100 pt-4 dark:border-zinc-800">
+        <Line
+          data={{
+            labels: seoSummary.chart.map((point) =>
+              new Date(point.date).toLocaleDateString("en-GB", { day: "numeric", month: "short" })
+            ),
+            datasets: [
+              {
+                label: "Avg. position",
+                data: seoSummary.chart.map((point) => point.position),
+                borderColor: "#c8102e",
+                backgroundColor: "rgba(200,16,46,.12)",
+                fill: true,
+                tension: 0.35,
+                pointRadius: 3,
+                pointBackgroundColor: "#c8102e",
+              },
+            ],
+          }}
+          options={{
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+              legend: { display: false },
+              tooltip: {
+                callbacks: { label: (context) => ` Position: ${Number(context.raw).toFixed(1)}` },
+              },
+            },
+            scales: {
+              x: { grid: { display: false }, ticks: { color: "#71717a" } },
+              y: { reverse: true, grid: { color: "rgba(113,113,122,.15)" }, ticks: { color: "#71717a" } },
+            },
+          }}
+        />
+      </div>
+    )}
+  </div>
+
+  {/* ---- การ์ดที่ 2: Ranking Distribution (Donut Graph) ---- */}
+  <div className="flex flex-col justify-between rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-700 dark:bg-zinc-900">
+    <div className="flex items-center justify-between border-b border-zinc-100 pb-4 dark:border-zinc-800">
+      <div>
+        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#c8102e]">
+          Tracked Keywords
+        </p>
+        <h2 className="mt-1 text-xl font-bold">Ranking distribution</h2>
+      </div>
+      <div className="flex items-center gap-1.5 rounded-full bg-red-50 px-3 py-1 text-xs font-semibold text-[#c8102e] dark:bg-red-950/40">
+        <span>Site: {seoSite === "all" ? "All" : seoSite}</span>
+      </div>
+    </div>
+
+      {/* counts all  แบ่ง ตามเว็บ */}
+
+      <div className="mt-2 flex gap-8 rouunded-full px-3 py-1 text-xs  ">
+      {/* <p>zmithailand : {seoSummary.zmithailand}</p> 
+      <p>thaisuperphone : {seoSummary.thaisuperphone}</p>  */}
+      </div>
+
+      {/* seo pie */}
+    {seoSummary.totalInTop20 > 0 ? (
+      <div className="mt-3 flex flex-col items-center gap-8 sm:flex-row sm:justify-center">
+        {/* กราฟ Donut พร้อมแสดงจำนวนรวมตรงกลาง */}
+        <div className="relative h-48 w-48">
+          <Doughnut
+            data={{
+              labels: ["Top 3", "Top 5 (4-5)", "Top 10 (6-10)", "Top 20 (11-20)"],
+              datasets: [
+                {
+                  data: seoSummary.buckets,
+                  backgroundColor: ["#c8102e", "#ef4444", "#f59e0b", "#94a3b8"],
+                  borderWidth: 0,
+                  hoverOffset: 5,
+                },
+              ],
+            }}
+            options={{
+              responsive: true,
+              maintainAspectRatio: false,
+              cutout: "70%",
+              plugins: { legend: { display: false } },
+            }}
+          />
+          <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+            <span className="text-3xl font-bold text-zinc-800 dark:text-white">
+              {seoSummary.totalInTop20}
+            </span>
+            <span className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500">
+              Keywords
+            </span>
+          </div>
+        </div>
+
+        {/* Legend แสดงข้อมูลแบบ List ด้านข้างกราฟ */}
+        <div className="space-y-3">
+          {[
+            { label: "Top 3", color: "#c8102e" },
+            { label: "Top 5 (4-5)", color: "#ef4444" },
+            { label: "Top 10 (6-10)", color: "#f59e0b" },
+            { label: "Top 20 (11-20)", color: "#94a3b8" },
+          ].map((item, index) => (
+            <div key={item.label} className="flex items-center gap-3 text-sm">
+              <span
+                className="h-3 w-3 rounded-full shadow-sm"
+                style={{ backgroundColor: item.color }}
+              />
+              <span className="w-28 font-medium text-zinc-600 dark:text-zinc-400">
+                {item.label}
+              </span>
+              <strong className="text-base text-zinc-900 dark:text-zinc-100">
+                {seoSummary.buckets[index]}
+              </strong>
+            </div>
+          ))}
+        </div>
+      </div>
+    ) : ( // if  error
+      <div className="flex h-full flex-col items-center justify-center py-12 text-center text-sm text-zinc-500">
+        <p>ไม่พบข้อมูล Keyword ที่ติดอันดับ Top 20</p>
+        <p className="mt-1 text-xs">ลองเลือก Site หรือช่วงเวลาอื่น</p>
+      </div>
+    )}
+
+  </div>
 </section>
 {/* top position seo grahp */}
 

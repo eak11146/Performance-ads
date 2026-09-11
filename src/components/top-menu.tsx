@@ -49,6 +49,7 @@ export default function TopMenu({ user }: TopMenuProps) {
           {resolvedUser && <Link className="transition-colors hover:text-zinc-950 dark:hover:text-white" href="/ads-report">Ads report</Link>}
           {resolvedUser && <Link className="transition-colors hover:text-zinc-950 dark:hover:text-white" href="/campaigns">Campaigns</Link>}
           {resolvedUser && <Link className="transition-colors hover:text-zinc-950 dark:hover:text-white" href="/seo-data">SEO data</Link>}
+          {resolvedUser && <Link className="transition-colors hover:text-zinc-950 dark:hover:text-white" href="/seo-performance">SEO Performance</Link>}
           {!resolvedUser && <Link className="rounded-lg border border-zinc-300 px-3 py-2 text-zinc-700 transition-colors hover:border-[#c8102e] hover:text-[#c8102e] dark:border-zinc-600 dark:text-zinc-200" href="/login">Login</Link>}
         </div>
         <div className="flex items-center gap-3">
