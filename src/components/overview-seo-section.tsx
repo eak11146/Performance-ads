@@ -59,6 +59,9 @@ function formatCompact(val: number) {
   return val.toLocaleString();
 }
 
+
+
+
 export default function OverviewSeoSection({
   performanceData = [],
   seoData = [],
@@ -71,6 +74,22 @@ export default function OverviewSeoSection({
   const [perfMetric, setPerfMetric] = useState<
     "clicks" | "display" | "ctr" | "ranking" | "sales" | "article"
   >("clicks");
+
+    const MONTH_ORDER: Record<string, number> = {
+    jan: 1, feb: 2, mar: 3, apr: 4, may: 5, jun: 6,
+    june: 6, jul: 7, july: 7, aug: 8, sep: 9, oct: 10, nov: 11, dec: 12,
+    };
+
+    function getMonthIndex(monthStr: string): number {
+    if (!monthStr) return 0;
+    const str = String(monthStr).trim().toLowerCase();
+    for (const [key, index] of Object.entries(MONTH_ORDER)) {
+        if (str.includes(key)) return index;
+    }
+    const match = str.match(/\d{4}[-/](\d{1,2})/);
+    if (match) return Number(match[1]);
+    return 0;
+    }
 
   // State การ์ดฝั่งขวา (SEO Keywords)
   const [seoSite, setSeoSite] = useState<string>("all");
@@ -99,9 +118,14 @@ export default function OverviewSeoSection({
     });
 
     // เรียงตาม Month จากอดีตไปปัจจุบัน
-    const sorted = [...filtered].sort((a, b) =>
-      String(a?.month || "").localeCompare(String(b?.month || ""))
-    );
+    const sorted = [...filtered].sort((a, b) => {
+    const indexA = getMonthIndex(a.month);
+    const indexB = getMonthIndex(b.month);
+    if (indexA !== indexB) {
+        return indexA - indexB;
+    }
+    return String(a.month || "").localeCompare(String(b.month || ""));
+    });
 
     const totalClicks = sorted.reduce((sum, item) => sum + Number(item?.clicks || 0), 0);
     const totalDisplay = sorted.reduce((sum, item) => sum + Number(item?.display || 0), 0);
