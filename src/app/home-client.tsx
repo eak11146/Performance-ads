@@ -359,7 +359,9 @@ export default function HomeClient() {
   }, []);
 
   const seoSites = useMemo(() => Array.from(new Set(seoRows.map((row) => row.site))).sort(), [seoRows]);
-  const seoSummary = useMemo(() => {
+
+  // seo section variable
+  /* const seoSummary = useMemo(() => {
     const scoped = seoRows.filter((row) => seoSite === "all" || row.site === seoSite);
     const latest = scoped.reduce((max, row) => Math.max(max, new Date(row.date).getTime() || 0), 0);
     const cutoff = latest - (seoPeriod - 1) * 86400000;
@@ -371,7 +373,68 @@ export default function HomeClient() {
     const buckets = [3, 5, 10, 20].map((limit, index, values) => rows.filter((row) => row.position > (index ? values[index - 1] : 0) && row.position <= limit).length);
     const chart = Array.from(new Set(rows.map((row) => row.date))).sort().slice(-8).map((date) => ({ date, position: (() => { const items = rows.filter((row) => row.date === date); const weight = items.reduce((sum, row) => sum + Math.max(row.impressions || 0, 1), 0); return weight ? items.reduce((sum, row) => sum + row.position * Math.max(row.impressions || 0, 1), 0) / weight : 0; })() }));
     return { rows, clicks, impressions, ctr: impressions ? (clicks / impressions) * 100 : 0, position: positionWeight ? weightedPosition / positionWeight : 0, buckets, chart };
+  }, [seoRows, seoSite, seoPeriod]); */
+
+const seoSummary = useMemo(() => {
+    // 1. กรองข้อมูลตาม Site ("all" คือค่าเริ่มต้น)
+    const scoped = seoRows.filter((row) => seoSite === "all" || row.site === seoSite);
+    
+    const latestTime = scoped.reduce((max, row) => Math.max(max, new Date(row.date).getTime() || 0), 0);
+    const cutoffTime = latestTime - (seoPeriod - 1) * 86400000;
+    
+    // 2. กรองข้อมูลตาม Period (ช่วงเวลา)
+    const rows = scoped.filter((row) => !latestTime || new Date(row.date).getTime() >= cutoffTime);
+    
+    const clicks = rows.reduce((sum, row) => sum + Number(row.clicks || 0), 0);
+    const impressions = rows.reduce((sum, row) => sum + Number(row.impressions || 0), 0);
+    const weightedPosition = rows.reduce((sum, row) => sum + Number(row.position || 0) * Math.max(Number(row.impressions || 0), 1), 0);
+    const positionWeight = rows.reduce((sum, row) => sum + Math.max(Number(row.impressions || 0), 1), 0);
+
+    // 3. จัดกลุ่ม Keyword เพื่อหาอันดับล่าสุด (แบ่ง Top 3, 5, 10, 20)
+    const keywordLatest = new Map();
+    // เรียงตามเวลาเพื่อให้ค่าสุดท้ายที่เข้า Map คือข้อมูลอัปเดตสุด
+    const sortedRows = [...rows].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    sortedRows.forEach(r => {
+       // ใช้ site + keyword เป็น key เพื่อแยกกรณีมี keyword ซ้ำในหลาย site
+       keywordLatest.set(`${r.site}_${r.keyword}`, Number(r.position));
+    });
+    
+    const latestPositions = Array.from(keywordLatest.values());
+    const buckets = [
+       latestPositions.filter(p => p > 0 && p <= 3).length,    // Top 3
+       latestPositions.filter(p => p > 3 && p <= 5).length,    // 4-5
+       latestPositions.filter(p => p > 5 && p <= 10).length,   // 6-10
+       latestPositions.filter(p => p > 10 && p <= 20).length,  // 11-20
+    ];
+    
+    // ยอดรวม Keyword เฉพาะที่อยู่ใน Top 20 
+    const totalInTop20 = buckets.reduce((a, b) => a + b, 0);
+
+    const chart = Array.from(new Set(rows.map((row) => row.date))).sort().slice(-8).map((date) => ({ 
+       date, 
+       position: (() => { 
+           const items = rows.filter((row) => row.date === date); 
+           const weight = items.reduce((sum, row) => sum + Math.max(row.impressions || 0, 1), 0); 
+           return weight ? items.reduce((sum, row) => sum + row.position * Math.max(row.impressions || 0, 1), 0) / weight : 0; 
+       })() 
+    }));
+
+    return { 
+        rows, 
+        clicks, 
+        impressions, 
+        ctr: impressions ? (clicks / impressions) * 100 : 0, 
+        position: positionWeight ? weightedPosition / positionWeight : 0, 
+        buckets, 
+        chart,
+        totalInTop20
+    };
   }, [seoRows, seoSite, seoPeriod]);
+
+
+// section seo
+
+
 
   const campaignRowsWithDate = useMemo(() => {
     return campaigns
@@ -1090,52 +1153,193 @@ export default function HomeClient() {
                 {/* row2   */}
 
 
-                    {/* seo section */}
-                        <section className=" mt-8 grid gap-6 lg:grid-cols-2">
+     {/* seo section */}
+  <section className="mt-8 grid gap-6 lg:grid-cols-2">
+  {/* ---- การ์ดที่ 1: Average Position & SEO Stats ---- */}
+  <div className="flex flex-col justify-between rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-700 dark:bg-zinc-900">
+    <div className="flex items-center justify-between border-b border-zinc-100 pb-4 dark:border-zinc-800">
+      <div>
+        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#c8102e]">
+          Seo Insights
+        </p>
+        <h2 className="mt-1 text-xl font-bold">Organic performance</h2>
+      </div>
 
-                          {/* Average Position */}
-                          <div className="flex flex-col justify-between rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-700 dark:bg-zinc-900">
-                            <div className="flex items-center justify-between border-b border-zinc-100 pb-4 dark:border-zinc-800">
-                              <div>
-                                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#c8102e]">
-                                  Seo Insights
-                                </p>
-                                <h2 className="mt-1 text-xl font-bold">Organic performance</h2>
-                              </div>
-                              {/* ค่าเฉลียน คะแนน seo แบบ graph ขึ้นลงเป็นเดือน */}
-                              <div className="flex items-center gap-1.5 rounded-full bg-red-50 px-3 py-1 text-xs font-semibold text-emerald-600 dark:bg-red-950/40">
-                                 <TrendingUp size={14}/>
-                                <span>{seoPeriod}-day view</span>
-                              </div>
+      <div className="flex items-center gap-1.5 rounded-full bg-red-50 px-3 py-1 text-xs font-semibold text-[#c8102e] dark:bg-red-950/40">
+        <TrendingUp size={14} />
+        <span>{seoPeriod}-day view</span>
+      </div>
+    </div>
 
-                          <div className="grid grid-cols-2 gap-3 pt-5 sm:grid-cols-4">
-                            <div><p className="text-xs text-zinc-500">Clicks</p><p className="mt-1 text-lg font-bold">{formatCompact(seoSummary.clicks)}</p></div>
-                            <div><p className="text-xs text-zinc-500">Impressions</p><p className="mt-1 text-lg font-bold">{formatCompact(seoSummary.impressions)}</p></div>
-                            <div><p className="text-xs text-zinc-500">CTR</p><p className="mt-1 text-lg font-bold">{seoSummary.ctr.toFixed(2)}%</p></div>
-                            <div><p className="text-xs text-zinc-500">Avg. position</p><p className="mt-1 text-lg font-bold">{seoSummary.position.toFixed(1)}</p></div>
-                            <div className="col-span-2 flex gap-2 sm:col-span-4"><select value={seoSite} onChange={(event) => setSeoSite(event.target.value)} className="rounded-lg border border-zinc-300 bg-white px-2 py-1.5 text-xs dark:border-zinc-600 dark:bg-zinc-800"><option value="all">All sites</option>{seoSites.map((site) => <option key={site} value={site}>{site}</option>)}</select>{[7, 15, 30].map((value) => <button key={value} onClick={() => setSeoPeriod(value as 7 | 15 | 30)} className={`rounded-lg px-2 py-1 text-xs ${seoPeriod === value ? "bg-[#c8102e] text-white" : "bg-zinc-100 dark:bg-zinc-800"}`}>{value}D</button>)}</div>
-                          </div>
-                          {seoSummary.chart.length > 0 && <div className="mt-5 h-48 border-t border-zinc-100 pt-4 dark:border-zinc-800"><Line data={{ labels: seoSummary.chart.map((point) => new Date(point.date).toLocaleDateString("en-GB", { day: "numeric", month: "short" })), datasets: [{ label: "Avg. position", data: seoSummary.chart.map((point) => point.position), borderColor: "#c8102e", backgroundColor: "rgba(200,16,46,.12)", fill: true, tension: .35, pointRadius: 3, pointBackgroundColor: "#c8102e" }] }} options={{ responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, tooltip: { callbacks: { label: (context) => ` Position: ${Number(context.raw).toFixed(1)}` } } }, scales: { x: { grid: { display: false }, ticks: { color: "#71717a" } }, y: { reverse: true, grid: { color: "rgba(113,113,122,.15)" }, ticks: { color: "#71717a" } } } }} /></div>}
+    {/* ตัวกรอง Site และ ระยะเวลา (มีผลควบคุมทั้ง 2 กราฟพร้อมกัน) */}
+    <div className="mt-5 flex flex-wrap gap-2">
+      <select
+        value={seoSite}
+        onChange={(event) => setSeoSite(event.target.value)}
+        className="rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-xs font-medium dark:border-zinc-600 dark:bg-zinc-800"
+      >
+        <option value="all">All sites (ค่าเริ่มต้น)</option>
+        {seoSites.map((site) => (
+          <option key={site} value={site}>
+            {site}
+          </option>
+        ))}
+      </select>
+      <div className="flex gap-1">
+        {[7, 15, 30].map((value) => (
+          <button
+            key={value}
+            onClick={() => setSeoPeriod(value as 7 | 15 | 30)}
+            className={`rounded-lg px-3 py-1.5 text-xs font-medium transition ${
+              seoPeriod === value
+                ? "bg-[#c8102e] text-white"
+                : "bg-zinc-100 text-zinc-600 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700"
+            }`}
+          >
+            {value}D
+          </button>
+        ))}
+      </div>
+    </div>
 
-                            </div>
-                        </div>
-                         <div className="flex flex-col justify-between rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-700 dark:bg-zinc-900">
-                            <div className="flex items-center justify-between border-b border-zinc-100 pb-4 dark:border-zinc-800">
-                              <div>
-                                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#c8102e]">
-                                  Tracked Keywords
-                                </p>
-                                <h2 className="mt-1 text-xl font-bold">Ranking distribution</h2>
-                              </div>
-                              {/* ค่าเฉลีย คะแนน seo แบบ graph ขึ้นลงเป็นเดือน */}
-                              <div className="flex items-center gap-1.5 rounded-full bg-red-50 px-3 py-1 text-xs font-semibold text-emerald-600 dark:bg-red-950/40">
-                                <span>Top 3, 5, 10, 20</span>
-                                 {/* ทำ Pie graph จากการนับตำแน่งแบ่งเป็น 3, 5, 10, 20 ใช้ข้อมูลจาก seo-data */}
-                              </div>
-                            </div>
-                            {seoSummary.rows.length ? <div className="mt-5 flex items-center gap-5"><div className="h-52 w-52"><Doughnut data={{ labels: ["Top 3", "4–5", "6–10", "11–20"], datasets: [{ data: seoSummary.buckets, backgroundColor: ["#c8102e", "#ef4444", "#f59e0b", "#94a3b8"], borderWidth: 0, hoverOffset: 5 }] }} options={{ responsive: true, maintainAspectRatio: false, cutout: "62%", plugins: { legend: { display: false } } }} /></div><div className="space-y-3">{["Top 3", "4–5", "6–10", "11–20"].map((label, index) => <div key={label} className="flex items-center gap-2 text-sm"><span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: ["#c8102e", "#ef4444", "#f59e0b", "#94a3b8"][index] }} /><span className="text-zinc-500">{label}</span><strong>{seoSummary.buckets[index]}</strong></div>)}</div></div> : <p className="py-12 text-center text-sm text-zinc-500">Upload SEO data to see keyword positions.</p>}
-                        </div>
-                  </section>
+    <div className="grid grid-cols-2 gap-3 pt-5 sm:grid-cols-4">
+      <div>
+        <p className="text-xs text-zinc-500">Clicks</p>
+        <p className="mt-1 text-lg font-bold">{formatCompact(seoSummary.clicks)}</p>
+      </div>
+      <div>
+        <p className="text-xs text-zinc-500">Impressions</p>
+        <p className="mt-1 text-lg font-bold">{formatCompact(seoSummary.impressions)}</p>
+      </div>
+      <div>
+        <p className="text-xs text-zinc-500">CTR</p>
+        <p className="mt-1 text-lg font-bold">{seoSummary.ctr.toFixed(2)}%</p>
+      </div>
+      <div>
+        <p className="text-xs text-zinc-500">Avg. position</p>
+        <p className="mt-1 text-lg font-bold">{seoSummary.position.toFixed(1)}</p>
+      </div>
+    </div>
+
+    {seoSummary.chart.length > 0 && (
+      <div className="mt-5 h-48 border-t border-zinc-100 pt-4 dark:border-zinc-800">
+        <Line
+          data={{
+            labels: seoSummary.chart.map((point) =>
+              new Date(point.date).toLocaleDateString("en-GB", { day: "numeric", month: "short" })
+            ),
+            datasets: [
+              {
+                label: "Avg. position",
+                data: seoSummary.chart.map((point) => point.position),
+                borderColor: "#c8102e",
+                backgroundColor: "rgba(200,16,46,.12)",
+                fill: true,
+                tension: 0.35,
+                pointRadius: 3,
+                pointBackgroundColor: "#c8102e",
+              },
+            ],
+          }}
+          options={{
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+              legend: { display: false },
+              tooltip: {
+                callbacks: { label: (context) => ` Position: ${Number(context.raw).toFixed(1)}` },
+              },
+            },
+            scales: {
+              x: { grid: { display: false }, ticks: { color: "#71717a" } },
+              y: { reverse: true, grid: { color: "rgba(113,113,122,.15)" }, ticks: { color: "#71717a" } },
+            },
+          }}
+        />
+      </div>
+    )}
+  </div>
+
+  {/* ---- การ์ดที่ 2: Ranking Distribution (Donut Graph) ---- */}
+  <div className="flex flex-col justify-between rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-700 dark:bg-zinc-900">
+    <div className="flex items-center justify-between border-b border-zinc-100 pb-4 dark:border-zinc-800">
+      <div>
+        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#c8102e]">
+          Tracked Keywords
+        </p>
+        <h2 className="mt-1 text-xl font-bold">Ranking distribution</h2>
+      </div>
+      <div className="flex items-center gap-1.5 rounded-full bg-red-50 px-3 py-1 text-xs font-semibold text-[#c8102e] dark:bg-red-950/40">
+        <span>Site: {seoSite === "all" ? "All" : seoSite}</span>
+      </div>
+    </div>
+
+    {seoSummary.totalInTop20 > 0 ? (
+      <div className="mt-8 flex flex-col items-center gap-8 sm:flex-row sm:justify-center">
+        {/* กราฟ Donut พร้อมแสดงจำนวนรวมตรงกลาง */}
+        <div className="relative h-48 w-48">
+          <Doughnut
+            data={{
+              labels: ["Top 3", "Top 5 (4-5)", "Top 10 (6-10)", "Top 20 (11-20)"],
+              datasets: [
+                {
+                  data: seoSummary.buckets,
+                  backgroundColor: ["#c8102e", "#ef4444", "#f59e0b", "#94a3b8"],
+                  borderWidth: 0,
+                  hoverOffset: 5,
+                },
+              ],
+            }}
+            options={{
+              responsive: true,
+              maintainAspectRatio: false,
+              cutout: "70%",
+              plugins: { legend: { display: false } },
+            }}
+          />
+          <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+            <span className="text-3xl font-bold text-zinc-800 dark:text-white">
+              {seoSummary.totalInTop20}
+            </span>
+            <span className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500">
+              Keywords
+            </span>
+          </div>
+        </div>
+
+        {/* Legend แสดงข้อมูลแบบ List ด้านข้างกราฟ */}
+        <div className="space-y-3">
+          {[
+            { label: "Top 3", color: "#c8102e" },
+            { label: "Top 5 (4-5)", color: "#ef4444" },
+            { label: "Top 10 (6-10)", color: "#f59e0b" },
+            { label: "Top 20 (11-20)", color: "#94a3b8" },
+          ].map((item, index) => (
+            <div key={item.label} className="flex items-center gap-3 text-sm">
+              <span
+                className="h-3 w-3 rounded-full shadow-sm"
+                style={{ backgroundColor: item.color }}
+              />
+              <span className="w-28 font-medium text-zinc-600 dark:text-zinc-400">
+                {item.label}
+              </span>
+              <strong className="text-base text-zinc-900 dark:text-zinc-100">
+                {seoSummary.buckets[index]}
+              </strong>
+            </div>
+          ))}
+        </div>
+      </div>
+    ) : ( // if  error
+      <div className="flex h-full flex-col items-center justify-center py-12 text-center text-sm text-zinc-500">
+        <p>ไม่พบข้อมูล Keyword ที่ติดอันดับ Top 20</p>
+        <p className="mt-1 text-xs">ลองเลือก Site หรือช่วงเวลาอื่น</p>
+      </div>
+    )}
+
+  </div>
+</section>
+{/* top position seo grahp */}
 
 
 

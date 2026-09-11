@@ -686,6 +686,7 @@ export default function SeoDataPage() {
               </label>
               <label>
                 Site
+                {/*  เปลี่ยน input  ไป  selectbox   
                 <input
                   type="text"
                   value={editingRow.site || ""}
@@ -693,7 +694,19 @@ export default function SeoDataPage() {
                     setEditingRow({ ...editingRow, site: e.target.value })
                   }
                   className="mt-1 w-full rounded-lg border border-zinc-300 p-2 dark:border-zinc-700 dark:bg-zinc-800"
-                />
+                /> */}
+                <select
+                  value={editingRow.site || ""}
+                  onChange={(e) =>
+                    setEditingRow({
+                      ...editingRow, site: e.target.value  })
+                    }
+                    className="mt-1 w-full rounded-lg border border-zinc-300 p-2 dark:border-zinc-700 dark:bg-zinc-800">
+                  <option value="zmithailland">Zmithailland</option>
+                  <option value="T=thaisuperphone" >Thaisuperphone</option>
+                  <option value="imilabthailand" >Imilabthailand</option>
+                   <option value="isuper">Isuper</option>   
+                </select>
               </label>
               <label>
                 Keyword
