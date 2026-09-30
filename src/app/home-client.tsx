@@ -64,86 +64,7 @@ type CarouselAdItem = {
   matchedCount: number;
 };
 
-const demoRows: CarouselAdItem[] = [
-  {
-    id: "demo-1",
-    brand: "Kieslect",
-    product: "BIOKOOP",
-    campaign: "Atom Ponlacha KIESLECT BIOKOOP 25-8-69 #1",
-    creator: "Atom Ponlacha 1",
-    impressions: 12785,
-    clicks: 54,
-    views: 3810,
-    engagement: 1151,
-    cpv: 0.13,
-    spend: 505.96,
-    ctr: 0.42,
-    grade: "A+",
-    rating: "4.8",
-    insight: "ดูแลสุขภาพได้ครบ โดยไม่ต้องจ่ายรายเดือน + Recovery / Body Load ช่วยให้รู้ว่าร่างกายพร้อมแค่ไหน",
-    action: "เพิ่มงบ — ใช้เป็น Creative หลัก และแตก Creative จาก Recovery / Body Load",
-    adsAngle: "Health Tracking + Recovery Management",
-    adsRole: "Hero / Consideration / Conversion",
-    hook: "“Body Load บอกได้ว่าวันนี้ควรออกกำลังกายถึงแค่ไหน”",
-    winningMessage: "“ดูแลสุขภาพได้ครบ โดยไม่ต้องจ่ายรายเดือน” + Recovery / Body Load ช่วยให้รู้ว่าร่างกายพร้อมแค่ไหน",
-    performanceSignal: "Retention สูงสุด 37.90% → 28.67% → 22.94% → 17.62% และ CTR 0.93% สูงสุด",
-    retention: { p25: 37.90, p50: 28.67, p75: 22.94, p100: 17.62 },
-    matchedCount: 2,
-  },
-  {
-    id: "demo-2",
-    brand: "Kieslect",
-    product: "Notepods 10S",
-    campaign: "PEEAKEWIT Kieslect AI Notepods 10S 13-8-69",
-    creator: "PEEAKEWIT",
-    impressions: 34280,
-    clicks: 112,
-    views: 14132,
-    engagement: 14132,
-    cpv: 0.08,
-    spend: 1107.51,
-    ctr: 0.33,
-    grade: "A+",
-    rating: "4.8",
-    insight: "Feature AI แปลภาษาแบบเรียลไทม์ และฟังก์ชันตัดเสียงรบกวนที่เด่นชัด",
-    action: "ดันงบ awareness ต่อเนื่องเพื่อขยายกลุ่มผู้ใช้งานวัยทำงาน",
-    adsAngle: "AI Smart Features",
-    adsRole: "Awareness / Consideration",
-    hook: "“AI ฟรี ไม่มีค่ารายเดือน” + AI Meeting + Translation",
-    winningMessage: "“ซื้อหูฟังครั้งเดียว ได้ AI โดยไม่ต้องจ่ายรายเดือน”",
-    performanceSignal: "CPV ฿0.07 / VTR 62.09% / 100% 20.59% / Engagement 54.89% / CTR 0.30% / 94 Click",
-    retention: { p25: 36.18, p50: 27.87, p75: 23.46, p100: 20.59 },
-    matchedCount: 2,
-  },
-  {
-    id: "demo-3",
-    brand: "Kieslect",
-    product: "Kieslect KS3",
-    campaign: "วิดีโอ Kieslect Actor & Ks3-Munk TV 2025-11-25",
-    creator: "Munk TV",
-    impressions: 79924,
-    clicks: 81,
-    views: 13941,
-    engagement: 13941,
-    cpv: 0.11,
-    spend: 1474.30,
-    ctr: 0.10,
-    grade: "A",
-    rating: "4.4",
-    insight: "รีวิวฟังก์ชันครบ จอแสดงผลสวยงาม และแบตเตอรี่อึดคุ้มค่าเกินราคา",
-    action: "ปรับช่วงเปิดคลิปให้กระชับขึ้นเพื่อเพิ่ม Click Intent",
-    adsAngle: "Value Proposition",
-    adsRole: "Hero Creative",
-    hook: "“สมาร์ทวอทช์ดีไซน์พรีเมียม หน้าจอ AMOLED คมชัด แบตเตอรี่อึด 14 วัน”",
-    winningMessage: "“ฟังก์ชันสุขภาพระดับท็อป ในราคาจับต้องได้ง่าย”",
-    performanceSignal: "Retention 43.62% → 33.50% → 27.51% → 23.68% ยอด View สูงสุด",
-    retention: { p25: 43.62, p50: 33.50, p75: 27.51, p100: 23.68 },
-    matchedCount: 2,
-  },
-];
-
-const emptyAd: CarouselAdItem = {
-  ...demoRows[0],
+ const emptyAd: CarouselAdItem = {
   id: "empty",
   brand: "-",
   product: "-",
@@ -168,6 +89,9 @@ const emptyAd: CarouselAdItem = {
   retention: { p25: 0, p50: 0, p75: 0, p100: 0 },
   matchedCount: 0,
 };
+
+
+
 
 function normalizedKey(value: string) {
   return value.toLowerCase().replace(/[\s_\-./():#]/g, "");
@@ -703,7 +627,7 @@ const seoSummary = useMemo(() => {
     });
   }, [reports, campaigns]);
 
-  const activeAd = carouselItems[carouselIndex % Math.max(carouselItems.length, 1)] || emptyAd;
+ const activeAd = (carouselItems[carouselIndex % Math.max(carouselItems.length, 1)] || emptyAd) as CarouselAdItem;
 
   const ctrOverall = campaignSummary.impressions ? (campaignSummary.clicks / campaignSummary.impressions) * 100 : 0;
   const avgCpvOverall = campaignSummary.views ? campaignSummary.spend / campaignSummary.views : 0;
@@ -767,7 +691,7 @@ const seoSummary = useMemo(() => {
 
   // Retention 4-point stock chart data & drop-off analysis
   const { retentionChartData, dropOffs } = useMemo(() => {
-    const { p25, p50, p75, p100 } = activeAd.retention;
+    const { p25, p50, p75, p100 } = activeAd.retention || emptyAd.retention;
     const values = [p25, p50, p75, p100];
     const labels = ["25%", "50%", "75%", "100%"];
 

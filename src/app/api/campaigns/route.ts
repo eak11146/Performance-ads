@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { ObjectId } from "mongodb";
 import clientPromise from "@/lib/mongodb";
 
 export const runtime = "nodejs";
@@ -83,5 +84,39 @@ export async function POST(request: Request) {
   } catch (error) {
     console.error("POST /api/campaigns failed", error);
     return NextResponse.json({ error: "Unable to import campaigns" }, { status: 500 });
+  }
+}
+
+// --- เพิ่มใหม่: ลบที่เลือก / ลบทั้งหมด ---
+export async function DELETE(request: Request) {
+  try {
+    const body = (await request.json()) as { ids?: string[] };
+    const ids = body.ids?.filter(Boolean) ?? [];
+
+    if (!ids.length) {
+      return NextResponse.json({ error: "ต้องระบุ ids ที่ต้องการลบ" }, { status: 400 });
+    }
+
+    // แปลงเป็น ObjectId ที่ถูกต้อง, ข้ามอันที่แปลงไม่ได้
+    const objectIds: ObjectId[] = [];
+    for (const id of ids) {
+      try {
+        if (ObjectId.isValid(id)) {
+          objectIds.push(new ObjectId(id));
+        }
+      } catch {}
+    }
+
+    if (!objectIds.length) {
+      return NextResponse.json({ error: "ids ไม่ถูกต้อง" }, { status: 400 });
+    }
+
+    const collection = await getCollection();
+    const result = await collection.deleteMany({ _id: { $in: objectIds } });
+
+    return NextResponse.json({ deleted: result.deletedCount });
+  } catch (error) {
+    console.error("DELETE /api/campaigns failed", error);
+    return NextResponse.json({ error: "Unable to delete campaigns" }, { status: 500 });
   }
 }
