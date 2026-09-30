@@ -5,7 +5,7 @@ import { Chart as ChartJS, ArcElement, CategoryScale, Filler, Legend, LineElemen
 import TopMenu from "@/components/top-menu";
 import OverviewSeoSection, { PerformanceItem, SeoDataItem } from "@/components/overview-seo-section";
 import { OverviewHeader } from "@/components/home/overview-header";
-import { PeriodFilter } from "@/components/home/period-filter";
+import { MonthFilter } from "@/components/home/month-filter";
 import { AdsHeroCarousel } from "@/components/home/ads-hero-carousel";
 import { ExecutiveInsights } from "@/components/home/executive-insights";
 import { fetchJsonSafely, sanitizeSeoData, sanitizePerformanceData } from "@/lib/safe-fetch";
@@ -149,13 +149,28 @@ export default function HomeClient() {
   }, []);
 
   const campaignRowsWithDate = useMemo(() => campaigns.filter(r=>{ const n=readField(r,["แคมเปญ","campaign"]); return n && n!=="--"; }).map(row=>({ row, date: parseCampaignDate(row) })), [campaigns]);
-  const filteredCampaigns = useMemo(() => {
+
+
+ /*  const filteredCampaigns = useMemo(() => {
     const dated = campaignRowsWithDate.filter(i=>i.date!==null);
     if (!dated.length) return campaignRowsWithDate.map(i=>i.row);
     const latest = Math.max(...dated.map(i=>i.date!.getTime()));
     const cutoff = latest - (period-1)*86400000;
     return campaignRowsWithDate.filter(i=>i.date===null || i.date!.getTime()>=cutoff).map(i=>i.row);
-  }, [campaignRowsWithDate, period]);
+  }, [campaignRowsWithDate, period]); */
+// แทนที่ filteredCampaigns เดิม
+const availableMonths = useMemo(() => {
+  const months = campaigns.map(r => String(r["เดือน"] || r["month"] || "").trim()).filter(Boolean);
+  return Array.from(new Set(months)).sort();
+}, [campaigns]);
+
+const [selectedMonth, setSelectedMonth] = useState<string>("all");
+
+const filteredCampaigns = useMemo(() => {
+  if (selectedMonth === "all") return campaigns;
+  return campaigns.filter(r => String(r["เดือน"] || r["month"] || "").trim() === selectedMonth);
+}, [campaigns, selectedMonth]);
+
 
   const campaignSummary = useMemo(() => {
     const source = filteredCampaigns.length? filteredCampaigns : campaigns;
@@ -273,7 +288,8 @@ export default function HomeClient() {
       <TopMenu user={user} />
       <main className="mx-auto max-w-7xl px-5 py-10 lg:px-8 lg:py-14">
         <OverviewHeader />
-        <PeriodFilter period={period} setPeriod={setPeriod} setCarouselIndex={setCarouselIndex} count={campaignSummary.campaigns} />
+        {/* <PeriodFilter period={period} setPeriod={setPeriod} setCarouselIndex={setCarouselIndex} count={campaignSummary.campaigns} /> */}
+        <MonthFilter months={availableMonths} selectedMonth={selectedMonth} setSelectedMonth={setSelectedMonth} count={campaignSummary.campaigns} />
 
         <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
           {metricCards.map(([label, value, Icon, tone, subtitle]) => (
