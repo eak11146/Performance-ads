@@ -7,6 +7,7 @@ export const runtime = "nodejs";
 type CampaignInput = Record<string, unknown>;
 
 const numericFields = new Set([
+  "เดือน", // เพิ่มให้เก็บได้ แต่ไม่แปลงเป็นตัวเลข
   "งบประมาณ",
   "การแสดงผล",
   "การดู TrueView",
@@ -32,33 +33,49 @@ async function getCollection() {
 }
 
 function parseMetric(value: unknown) {
-  const text = String(value ?? "").trim();
+  const text = String(value?? "").trim();
   if (!text) return "";
+  // เดือน ไม่ต้องแปลง
+  if (/^\d{4}[-/]\d{1,2}$/.test(text) || /^(ม\.ค\.|ก\.พ\.|ม\.ย\.|มกราคม|jan|feb)/i.test(text)) {
+    return text;
+  }
   const number = Number(text.replace(/[^\d.-]/g, ""));
-  return Number.isNaN(number) ? text : number;
+  return Number.isNaN(number)? text : number;
 }
 
 function cleanCampaign(row: CampaignInput) {
   return Object.fromEntries(
     Object.entries(row)
-      .map(([field, value]) => {
+     .map(([field, value]) => {
         const cleanField = field.trim();
-        return [cleanField, numericFields.has(cleanField) ? parseMetric(value) : String(value ?? "").trim()] as const;
+        // เดือน เก็บเป็น string
+        if (cleanField === "เดือน" || cleanField.toLowerCase() === "month") {
+          return [cleanField, String(value?? "").trim()] as const;
+        }
+        return [cleanField, numericFields.has(cleanField)? parseMetric(value) : String(value?? "").trim()] as const;
       })
-      .filter(([field, value]) => field !== "_id" && !/^__empty/i.test(field) && value !== ""),
+     .filter(([field, value]) => field!== "_id" &&!/^__empty/i.test(field) && value!== ""),
   );
 }
 
+// แก้ใหม่: รองรับเดือน + แคมเปญ + ไม่มีหัว
 function isCampaignRow(row: Record<string, unknown>) {
-  const campaign = String(row["แคมเปญ"] ?? "").trim();
-  const status = String(row["สถานะ"] ?? "").trim();
-  return Boolean(campaign || status) && !/^(แคมเปญ|campaign)$/i.test(campaign);
+  const campaign = String(row["แคมเปญ"]?? row["campaign"]?? "").trim();
+  const status = String(row["สถานะ"]?? "").trim();
+  const month = String(row["เดือน"]?? row["month"]?? "").trim();
+  const budget = String(row["งบประมาณ"]?? row["budget"]?? "").trim();
+
+  // กันแถวที่เป็นหัวตารางซ้ำ
+  if (/^(แคมเปญ|campaign|เดือน|month|งบประมาณ)$/i.test(campaign)) return false;
+
+  // ถ้ามีอย่างน้อย 1 อย่างถือว่าใช้ได้: แคมเปญ, เดือน+งบประมาณ, สถานะ
+  return Boolean(campaign || status || (month && budget) || (month && campaign));
 }
 
 export async function GET() {
   try {
     const rows = await (await getCollection()).find({}).sort({ createdAt: -1 }).toArray();
-    return NextResponse.json(rows.map((row) => Object.fromEntries(Object.entries(row).filter(([field]) => field !== "updatedAt"))));
+    return NextResponse.json(rows.map((row) => Object.fromEntries(Object.entries(row).filter(([field]) => field!== "updatedAt"))));
   } catch (error) {
     console.error("GET /api/campaigns failed", error);
     return NextResponse.json({ error: "Unable to load campaigns" }, { status: 500 });
@@ -68,16 +85,17 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     const body = (await request.json()) as { rows?: CampaignInput[] };
-    if (!Array.isArray(body.rows) || !body.rows.length) {
+    if (!Array.isArray(body.rows) ||!body.rows.length) {
       return NextResponse.json({ error: "At least one campaign row is required" }, { status: 400 });
     }
     const now = new Date();
     const documents = body.rows
-      .map(cleanCampaign)
-      .filter(isCampaignRow)
-      .map((row) => ({ ...row, createdAt: now, updatedAt: now }));
+     .map(cleanCampaign)
+     .filter(isCampaignRow)
+     .map((row) => ({...row, createdAt: now, updatedAt: now }));
+
     if (!documents.length) {
-      return NextResponse.json({ error: "ไม่พบแถวข้อมูล campaign ที่ถูกต้อง" }, { status: 400 });
+      return NextResponse.json({ error: "ไม่พบแถวข้อมูล campaign ที่ถูกต้อง (ต้องมี เดือน/แคมเปญ/สถานะ อย่างน้อย 1 อย่าง)" }, { status: 400 });
     }
     const result = await (await getCollection()).insertMany(documents);
     return NextResponse.json({ imported: result.insertedCount }, { status: 201 });
@@ -87,17 +105,13 @@ export async function POST(request: Request) {
   }
 }
 
-// --- เพิ่มใหม่: ลบที่เลือก / ลบทั้งหมด ---
 export async function DELETE(request: Request) {
   try {
     const body = (await request.json()) as { ids?: string[] };
-    const ids = body.ids?.filter(Boolean) ?? [];
-
+    const ids = body.ids?.filter(Boolean)?? [];
     if (!ids.length) {
       return NextResponse.json({ error: "ต้องระบุ ids ที่ต้องการลบ" }, { status: 400 });
     }
-
-    // แปลงเป็น ObjectId ที่ถูกต้อง, ข้ามอันที่แปลงไม่ได้
     const objectIds: ObjectId[] = [];
     for (const id of ids) {
       try {
@@ -106,14 +120,11 @@ export async function DELETE(request: Request) {
         }
       } catch {}
     }
-
     if (!objectIds.length) {
       return NextResponse.json({ error: "ids ไม่ถูกต้อง" }, { status: 400 });
     }
-
     const collection = await getCollection();
     const result = await collection.deleteMany({ _id: { $in: objectIds } });
-
     return NextResponse.json({ deleted: result.deletedCount });
   } catch (error) {
     console.error("DELETE /api/campaigns failed", error);
