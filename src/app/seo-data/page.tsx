@@ -1,10 +1,10 @@
 "use client";
 
-import { ChangeEvent, useEffect, useMemo, useState } from "react";
+import { ChangeEvent, DragEvent, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import * as XLSX from "xlsx";
-import { Trash2, Upload, Search, Edit3, BarChart3 } from "lucide-react";
+import { Trash2, Upload, Search, Edit3, BarChart3, FileSpreadsheet, X } from "lucide-react";
 import TopMenu from "@/components/top-menu";
 
 type SeoRow = {
@@ -58,12 +58,13 @@ const number = (value: string | number | undefined | null) => {
 function parseSheet(sheet: XLSX.WorkSheet, defaultSite: string, defaultDate: string): SheetRow[] {
   const matrix = XLSX.utils.sheet_to_json<unknown[]>(sheet, { header: 1, defval: "", raw: false });
   if (!matrix.length) throw new Error("ไฟล์ว่างเปล่า");
-  let headerAt = matrix.findIndex((line) => Array.isArray(line) && line.some((v) => isExactMatch(String(v), fields.keyword)));
-  if (headerAt < 0) headerAt = matrix.findIndex((line) => Array.isArray(line) && line.some((v) => isPartialMatch(String(v), fields.keyword)));
-  if (headerAt < 0) throw new Error("ไม่พบคอลัมน์ Keyword ในไฟล์นี้");
-  const rawHeaders = (matrix[headerAt] || []).map((v) => String(v?? "").trim());
+  const cleanMatrix = matrix.filter((r: any) => Array.isArray(r) && r.some((c: any) => String(c).trim()!== ""));
+  let headerAt = cleanMatrix.findIndex((line: any) => Array.isArray(line) && line.some((v: any) => isExactMatch(String(v), fields.keyword)));
+  if (headerAt < 0) headerAt = cleanMatrix.findIndex((line: any) => Array.isArray(line) && line.some((v: any) => isPartialMatch(String(v), fields.keyword)));
+  if (headerAt < 0) throw new Error("ไม่พบคอลัมน์ Keyword / Query ในไฟล์นี้");
+  const rawHeaders = (cleanMatrix[headerAt] || []).map((v: any) => String(v?? "").trim());
   const colIndex: { [key: string]: number } = {};
-  rawHeaders.forEach((header, idx) => {
+  rawHeaders.forEach((header: string, idx: number) => {
     if (!header) return;
     if (colIndex.keyword === undefined && matchField(header, fields.keyword)) colIndex.keyword = idx;
     else if (colIndex.clicks === undefined && matchField(header, fields.clicks)) colIndex.clicks = idx;
@@ -74,8 +75,8 @@ function parseSheet(sheet: XLSX.WorkSheet, defaultSite: string, defaultDate: str
     else if (colIndex.date === undefined && matchField(header, fields.date)) colIndex.date = idx;
   });
   const parsedRows: SheetRow[] = [];
-  for (let i = headerAt + 1; i < matrix.length; i++) {
-    const line = matrix[i];
+  for (let i = headerAt + 1; i < cleanMatrix.length; i++) {
+    const line = cleanMatrix[i] as any[];
     if (!Array.isArray(line)) continue;
     const kw = colIndex.keyword!== undefined? String(line[colIndex.keyword]?? "").trim() : "";
     if (!kw) continue;
@@ -104,11 +105,12 @@ export default function SeoDataPage() {
   const [site, setSite] = useState("");
   const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [fileName, setFileName] = useState("");
-  const [message, setMessage] = useState("Select a spreadsheet (.xlsx,.xls,.csv). Site and Date are filled automatically if absent.");
+  const [message, setMessage] = useState("ลากไฟล์มาวางได้เลย - รองรับ Google Search Console Export");
   const [loading, setLoading] = useState(false);
   const [editingRow, setEditingRow] = useState<SeoRow | null>(null);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [page, setPage] = useState(1);
+  const [dragActive, setDragActive] = useState(false);
   const pageSize = 15;
 
   const load = async () => {
@@ -130,9 +132,7 @@ export default function SeoDataPage() {
     return () => clearTimeout(timer);
   }, [router]);
 
-  async function upload(event: ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0];
-    if (!file) return;
+  async function processFile(file: File) {
     setLoading(true);
     setMessage(`กำลังอ่านไฟล์ ${file.name}...`);
     try {
@@ -148,15 +148,30 @@ export default function SeoDataPage() {
       if (!rows.length) throw new Error("ไม่พบแถวข้อมูล");
       setPreview(rows);
       setFileName(file.name);
-      setMessage(`พร้อมนำเข้า ${rows.length} แถวจากไฟล์ "${file.name}"`);
+      setMessage(`พร้อมนำเข้า ${rows.length} แถวจากไฟล์ "${file.name}" - ลากวางสำเร็จ`);
     } catch (error: unknown) {
       const errMsg = error instanceof Error? error.message : String(error);
       setPreview([]);
       setMessage(`เกิดข้อผิดพลาด: ${errMsg}`);
     } finally {
       setLoading(false);
-      event.target.value = "";
     }
+  }
+
+  async function upload(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    await processFile(file);
+    event.target.value = "";
+  }
+
+  function handleDragOver(e: DragEvent<HTMLDivElement>) { e.preventDefault(); e.stopPropagation(); setDragActive(true); }
+  function handleDragLeave(e: DragEvent<HTMLDivElement>) { e.preventDefault(); e.stopPropagation(); setDragActive(false); }
+  async function handleDrop(e: DragEvent<HTMLDivElement>) {
+    e.preventDefault(); e.stopPropagation(); setDragActive(false);
+    const file = e.dataTransfer.files?.[0];
+    if (!file) return;
+    await processFile(file);
   }
 
   async function importRows() {
@@ -194,7 +209,7 @@ export default function SeoDataPage() {
 
   async function handleDeleteAll() {
     if (!saved.length) return;
-    if (!confirm(`ต้องการลบทั้งหมด ${saved.length} แถวหรือไม่? การกระทำนี้ไม่สามารถย้อนกลับได้`)) return;
+    if (!confirm(`ต้องการลบทั้งหมด ${saved.length} แถวหรือไม่?`)) return;
     const allIds = saved.map((r) => r._id).filter((id): id is string => Boolean(id));
     await handleBulkDelete(allIds);
   }
@@ -211,10 +226,9 @@ export default function SeoDataPage() {
   const shown = saved.slice((page - 1) * pageSize, page * pageSize);
   const pages = Math.max(1, Math.ceil(saved.length / pageSize));
   const savedIds = saved.map((r) => r._id).filter((id): id is string => Boolean(id));
-  const allSelected = savedIds.length > 0 && savedIds.every((id) => selectedIds.includes(id));
   const visibleIds = shown.map((r) => r._id).filter((id): id is string => Boolean(id));
   const allVisibleSelected = visibleIds.length > 0 && visibleIds.every((id) => selectedIds.includes(id));
-
+  const allSelected = savedIds.length > 0 && savedIds.every((id) => selectedIds.includes(id));
   const sites = useMemo(() => new Set(saved.map((row) => row.site)).size, [saved]);
 
   if (!authorized) {
@@ -230,7 +244,7 @@ export default function SeoDataPage() {
             <div>
               <p className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[.2em] text-[#c8102e]"><BarChart3 size={14} /> SEO performance</p>
               <h1 className="mt-3 text-4xl font-bold tracking-tight">SEO data center</h1>
-              <p className="mt-2 text-sm text-zinc-500">จัดการ Keyword, Clicks, Impressions และ Ranking แบบรวมศูนย์</p>
+              <p className="mt-2 text-sm text-zinc-500">ลากไฟล์ Search Console มาวางได้เลย - Auto Map Keyword, Clicks, Impressions</p>
             </div>
             <Link href="/dashboard" className="text-sm font-medium text-zinc-500 underline underline-offset-4 hover:text-zinc-800">Back to dashboard</Link>
           </div>
@@ -238,21 +252,32 @@ export default function SeoDataPage() {
           <section className="grid gap-4 rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-700 dark:bg-zinc-900">
             <div className="grid gap-4 sm:grid-cols-2">
               <label className="text-sm font-semibold">Default website
-                <input value={site} onChange={(e) => setSite(e.target.value)} placeholder="zmi.co.th" className="mt-2 w-full rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2.5 text-sm font-normal outline-none focus:border-[#c8102e] focus:ring-2 focus:ring-[#c8102e]/10 dark:border-zinc-700 dark:bg-zinc-800" />
+                <input value={site} onChange={(e) => setSite(e.target.value)} placeholder="zmi.co.th" className="mt-2 w-full rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2.5 text-sm outline-none focus:border-[#c8102e] focus:ring-2 focus:ring-[#c8102e]/10 dark:border-zinc-700 dark:bg-zinc-800" />
               </label>
               <label className="text-sm font-semibold">Default date
-                <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="mt-2 w-full rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2.5 text-sm font-normal outline-none focus:border-[#c8102e] focus:ring-2 focus:ring-[#c8102e]/10 dark:border-zinc-700 dark:bg-zinc-800" />
+                <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="mt-2 w-full rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2.5 text-sm outline-none focus:border-[#c8102e] focus:ring-2 focus:ring-[#c8102e]/10 dark:border-zinc-700 dark:bg-zinc-800" />
               </label>
             </div>
-            <div className="rounded-2xl border border-dashed border-zinc-300 bg-zinc-50/50 p-8 text-center dark:border-zinc-600 dark:bg-zinc-800/30">
+
+            <div
+              onDragOver={handleDragOver}
+              onDragLeave={handleDragLeave}
+              onDrop={handleDrop}
+              className={`rounded-2xl border-2 border-dashed p-8 text-center transition-all ${dragActive? "border-[#c8102e] bg-red-50 dark:bg-red-950/20" : "border-zinc-300 bg-zinc-50/50 dark:border-zinc-600 dark:bg-zinc-800/30"}`}
+            >
               <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-white shadow-sm dark:bg-zinc-800"><Upload className="text-[#c8102e]" size={20} /></div>
-              <p className="mt-3 font-semibold">Upload SEO spreadsheet</p>
-              <p className="mt-1 text-sm text-zinc-500">Needs Keyword / Query. Other fields auto-mapped.</p>
+              <p className="mt-3 font-semibold">{dragActive? "วางไฟล์ตรงนี้เลย" : "Upload SEO spreadsheet"}</p>
+              <p className="mt-1 text-sm text-zinc-500">ลากไฟล์มาวางที่นี่ หรือคลิกเลือก - Needs Keyword / Query</p>
               <label className={`mt-5 inline-flex cursor-pointer rounded-full bg-zinc-950 px-6 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-[#c8102e] ${loading? "opacity-50 pointer-events-none" : ""}`}>
                 Choose.xlsx,.xls or.csv
                 <input className="sr-only" type="file" accept=".xlsx,.xls,.csv" onChange={upload} disabled={loading} />
               </label>
-              {fileName && <p className="mt-3 text-sm font-medium text-zinc-700">{fileName}</p>}
+              {fileName && (
+                <div className="mt-3 inline-flex items-center gap-2 rounded-full bg-white px-4 py-2 text-sm shadow-sm dark:bg-zinc-800">
+                  <FileSpreadsheet size={16} /> {fileName}
+                  <button onClick={() => { setFileName(""); setPreview([]); }} className="rounded-full p-1 hover:bg-zinc-100"><X size={14} /></button>
+                </div>
+              )}
               <p className="mt-2 text-sm text-zinc-500">{message}</p>
             </div>
           </section>
@@ -260,11 +285,11 @@ export default function SeoDataPage() {
           {preview.length > 0 && (
             <section className="mt-6 overflow-hidden rounded-2xl border border-amber-200 bg-white shadow-sm dark:border-zinc-700 dark:bg-zinc-900">
               <div className="flex items-center justify-between bg-amber-50 px-5 py-4 dark:bg-amber-950/20">
-                <h2 className="font-semibold">Preview — {preview.length} rows</h2>
+                <h2 className="font-semibold">Preview — {preview.length} rows - ลากวางสำเร็จ</h2>
                 <button onClick={importRows} disabled={loading} className="rounded-full bg-[#c8102e] px-5 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50">{loading? "Importing..." : "Import data"}</button>
               </div>
               <div className="max-h-72 overflow-auto">
-                <table className="w-full min-w- text-left text-sm">
+                <table className="w-full text-left text-sm">
                   <thead className="sticky top-0 bg-zinc-50 text-xs uppercase text-zinc-500 dark:bg-zinc-800"><tr><th className="px-4 py-3">Date</th><th className="px-4 py-3">Site</th><th className="px-4 py-3">Keyword</th><th className="px-4 py-3 text-right">Clicks</th><th className="px-4 py-3 text-right">Impressions</th><th className="px-4 py-3 text-right">CTR</th><th className="px-4 py-3 text-right">Pos</th></tr></thead>
                   <tbody>{preview.slice(0, 30).map((row, i) => (
                     <tr key={i} className="border-t border-zinc-100 dark:border-zinc-800"><td className="px-4 py-2">{String(row.date).slice(0, 10)}</td><td className="px-4 py-2">{String(row.site)}</td><td className="px-4 py-2 max-w- truncate" title={String(row.keyword)}>{String(row.keyword)}</td><td className="px-4 py-2 text-right">{number(row.clicks).toLocaleString()}</td><td className="px-4 py-2 text-right">{number(row.impressions).toLocaleString()}</td><td className="px-4 py-2 text-right">{number(row.ctr).toFixed(2)}%</td><td className="px-4 py-2 text-right">{number(row.position).toFixed(1)}</td></tr>
@@ -281,18 +306,16 @@ export default function SeoDataPage() {
                 <p className="mt-1 text-xs text-zinc-500">{saved.length} rows • {sites} sites • Page {page}/{pages} • เลือก {selectedIds.length}</p>
               </div>
               <div className="flex flex-wrap items-center gap-2">
-                {selectedIds.length > 0 && (
-                  <button onClick={() => handleBulkDelete(selectedIds)} className="inline-flex items-center gap-1.5 rounded-full bg-red-600 px-4 py-2 text-xs font-semibold text-white hover:bg-red-700"><Trash2 size={14} /> ลบที่เลือก ({selectedIds.length})</button>
-                )}
+                {selectedIds.length > 0 && <button onClick={() => handleBulkDelete(selectedIds)} className="inline-flex items-center gap-1.5 rounded-full bg-red-600 px-4 py-2 text-xs font-semibold text-white hover:bg-red-700"><Trash2 size={14} /> ลบที่เลือก ({selectedIds.length})</button>}
                 <button onClick={handleDeleteAll} disabled={!saved.length} className="inline-flex items-center gap-1.5 rounded-full border border-red-200 bg-white px-4 py-2 text-xs font-semibold text-red-600 hover:bg-red-50 disabled:opacity-40"><Trash2 size={14} /> ลบทั้งหมด</button>
               </div>
             </div>
 
             <div className="overflow-auto">
-              <table className="w-full min-w- text-left text-sm">
+              <table className="w-full text-left text-sm">
                 <thead className="bg-white text-xs font-semibold uppercase tracking-wide text-zinc-500 shadow-sm dark:bg-zinc-900">
                   <tr>
-                    <th className="w- px-4 py-3"><input type="checkbox" checked={allVisibleSelected} onChange={() => {
+                    <th style={{ width: 48 }} className="px-4 py-3"><input type="checkbox" checked={allVisibleSelected} onChange={() => {
                       if (allVisibleSelected) setSelectedIds((cur) => cur.filter((id) =>!visibleIds.includes(id)));
                       else setSelectedIds((cur) => Array.from(new Set([...cur,...visibleIds])));
                     }} /></th>
@@ -303,12 +326,12 @@ export default function SeoDataPage() {
                     <th className="px-4 py-3 text-right">Impr.</th>
                     <th className="px-4 py-3 text-right">CTR</th>
                     <th className="px-4 py-3 text-right">Pos</th>
-                    <th className="w- px-4 py-3 text-center">Actions</th>
+                    <th style={{ width: 100 }} className="px-4 py-3 text-center">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
                   {shown.length === 0? (
-                    <tr><td colSpan={9} className="px-4 py-16 text-center text-zinc-500">ยังไม่มีข้อมูล SEO ในระบบ กรุณาอัปโหลดไฟล์ด้านบน</td></tr>
+                    <tr><td colSpan={9} className="px-4 py-16 text-center text-zinc-500">ยังไม่มีข้อมูล SEO - ลากไฟล์มาวางด้านบนได้เลย</td></tr>
                   ) : (
                     shown.map((row, idx) => (
                       <tr key={row._id || idx} className="border-t border-zinc-100 odd:bg-white even:bg-zinc-50/50 hover:bg-amber-50/50 dark:border-zinc-800 dark:odd:bg-zinc-900 dark:even:bg-zinc-800/30">
@@ -360,7 +383,7 @@ export default function SeoDataPage() {
                   <option value="zmithailand">Zmithailand</option>
                   <option value="thaisuperphone">Thaisuperphone</option>
                   <option value="imilabthailand">Imilabthailand</option>
-                  <option value="isuper">Isuper</option> 
+                  <option value="isuper">Isuper</option>
                 </select>
               </label>
               <label>Keyword<input type="text" value={editingRow.keyword || ""} onChange={(e) => setEditingRow({...editingRow, keyword: e.target.value })} className="mt-1 w-full rounded-xl border border-zinc-200 bg-zinc-50 p-2.5 dark:border-zinc-700 dark:bg-zinc-800" /></label>

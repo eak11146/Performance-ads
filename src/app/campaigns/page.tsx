@@ -1,10 +1,10 @@
 "use client";
 
-import { ChangeEvent, useEffect, useMemo, useState } from "react";
+import { ChangeEvent, DragEvent, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import * as XLSX from "xlsx";
-import { BarChart3, CheckCircle2, CircleDollarSign, Eye, MousePointerClick, Upload, Trash2 } from "lucide-react";
+import { BarChart3, CheckCircle2, CircleDollarSign, Eye, MousePointerClick, Upload, Trash2, FileSpreadsheet, X } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import TopMenu from "@/components/top-menu";
 import type { DemoUser } from "@/data/users";
@@ -20,15 +20,15 @@ const campaignHeaders = [
 
 const numericHeaders = new Set(campaignHeaders.filter((h) => h!== "แคมเปญ" && h!== "สถานะ"));
 
-function getColumnStyle(header: string) {
+function getColumnStyle(header: string): React.CSSProperties {
   const h = header.toLowerCase();
-  if (h.includes("แคมเปญ")) return "min-w- w- max-w-";
-  if (h.includes("งบประมาณ") || h.includes("ค่าใช้จ่าย")) return "min-w- w- text-right font-medium";
-  if (h.includes("สถานะ")) return "min-w- w- text-center";
-  if (h.includes("การแสดงผล") || h.includes("การดู") || h.includes("คลิก")) return "min-w- w- text-right";
-  if (h.includes("cpv") || h.includes("cpm") || h.includes("ctr") || h.includes("อัตรา")) return "min-w- w- text-right";
-  if (h.includes("วิดีโอ")) return "min-w- w- text-right";
-  return "min-w- w- max-w-";
+  if (h.includes("แคมเปญ")) return { minWidth: 200, width: 260 };
+  if (h.includes("งบประมาณ") || h.includes("ค่าใช้จ่าย")) return { minWidth: 120, width: 130, textAlign: "right" as const, fontWeight: 600 };
+  if (h.includes("สถานะ")) return { minWidth: 110, width: 110, textAlign: "center" as const };
+  if (h.includes("การแสดงผล") || h.includes("การดู") || h.includes("คลิก")) return { minWidth: 110, width: 120, textAlign: "right" as const };
+  if (h.includes("cpv") || h.includes("cpm") || h.includes("ctr") || h.includes("อัตรา")) return { minWidth: 110, width: 130, textAlign: "right" as const };
+  if (h.includes("วิดีโอ")) return { minWidth: 110, width: 120, textAlign: "right" as const };
+  return { minWidth: 120, width: 140 };
 }
 
 function parseNumber(value: string | number | undefined) {
@@ -40,16 +40,30 @@ function normalizedHeader(value: string) {
 }
 function parseCampaignSheet(sheet: XLSX.WorkSheet) {
   const matrix = XLSX.utils.sheet_to_json<unknown[]>(sheet, { header: 1, defval: "", raw: false });
-  const headerIndex = matrix.findIndex((row) => {
+  const cleanMatrix = matrix.filter((r) => r.some((c) => String(c).trim()!== ""));
+  const headerIndex = cleanMatrix.findIndex((row) => {
     const headers = row.map((cell) => normalizedHeader(String(cell).trim()));
     return headers.includes(normalizedHeader("แคมเปญ")) && headers.includes(normalizedHeader("งบประมาณ"));
   });
-  if (headerIndex < 0) throw new Error("ไม่พบ header แคมเปญ และ งบประมาณ");
-  const headers = matrix[headerIndex].map((cell) => String(cell).trim());
-  return matrix.slice(headerIndex + 1)
-   .map((row) => Object.fromEntries(headers.map((header, index) => [header, String(row[index]?? "").trim()]).filter(([header, value]) => header && value)))
-   .filter((row) => Object.keys(row).length > 0)
-   .filter((row) =>!/^(แคมเปญ|campaign)$/i.test(String(row["แคมเปญ"] || "")));
+  if (headerIndex < 0) {
+    // fallback: ถ้าไม่มีหัวภาษาไทย ลองหา campaign + budget แบบอังกฤษ
+    const engIndex = cleanMatrix.findIndex((row) => {
+      const h = row.map((c) => String(c).toLowerCase());
+      return h.some(x => x.includes("campaign")) && h.some(x => x.includes("budget") || x.includes("cost"));
+    });
+    if (engIndex >= 0) {
+      const headers = cleanMatrix[engIndex].map((cell) => String(cell).trim());
+      return cleanMatrix.slice(engIndex + 1)
+      .map((row) => Object.fromEntries(headers.map((header, index) => [header, String(row[index]?? "").trim()]).filter(([header, value]) => header && value)))
+      .filter((row) => Object.keys(row).length > 0);
+    }
+    throw new Error("ไม่พบ header แคมเปญ และ งบประมาณ ในไฟล์");
+  }
+  const headers = cleanMatrix[headerIndex].map((cell) => String(cell).trim());
+  return cleanMatrix.slice(headerIndex + 1)
+  .map((row) => Object.fromEntries(headers.map((header, index) => [header, String(row[index]?? "").trim()]).filter(([header, value]) => header && value)))
+  .filter((row) => Object.keys(row).length > 0)
+  .filter((row) =>!/^(แคมเปญ|campaign)$/i.test(String(row["แคมเปญ"] || "")));
 }
 function displayValue(value: string | number | undefined, header: string) {
   if (value === undefined || value === "") return "-";
@@ -64,10 +78,11 @@ export default function CampaignsPage() {
   const [rows, setRows] = useState<CampaignRow[]>([]);
   const [previewRows, setPreviewRows] = useState<CampaignRow[]>([]);
   const [fileName, setFileName] = useState("");
-  const [message, setMessage] = useState("Upload Google Ads campaign Excel เพื่อเริ่มต้น");
+  const [message, setMessage] = useState("ลากไฟล์มาวางได้เลย - รองรับ Google Ads Video Report");
   const [campaignPage, setCampaignPage] = useState(1);
   const [campaignPageSize, setCampaignPageSize] = useState(10);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [dragActive, setDragActive] = useState(false);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -86,19 +101,37 @@ export default function CampaignsPage() {
     return () => window.clearTimeout(timer);
   }, [router]);
 
-  async function handleFile(event: ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0];
-    if (!file) return;
+  async function processFile(file: File) {
     try {
+      const valid = [".xlsx", ".xls", ".csv"];
+      if (!valid.some(ext => file.name.toLowerCase().endsWith(ext))) {
+        setMessage("รองรับเฉพาะ.xlsx,.xls,.csv");
+        return;
+      }
       const workbook = XLSX.read(await file.arrayBuffer(), { type: "array" });
       const parsed = parseCampaignSheet(workbook.Sheets[workbook.SheetNames[0]]);
       setPreviewRows(parsed);
       setFileName(file.name);
-      setMessage(`${parsed.length} rows ready. ตรวจสอบข้อมูลก่อน import`);
+      setMessage(`${parsed.length} rows ready - ลากวางสำเร็จ ตรวจสอบก่อน import`);
     } catch (error) {
       setPreviewRows([]);
       setMessage(error instanceof Error? error.message : "ไม่สามารถอ่านไฟล์ได้");
     }
+  }
+
+  async function handleFile(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    await processFile(file);
+  }
+
+  function handleDragOver(e: DragEvent<HTMLDivElement>) { e.preventDefault(); e.stopPropagation(); setDragActive(true); }
+  function handleDragLeave(e: DragEvent<HTMLDivElement>) { e.preventDefault(); e.stopPropagation(); setDragActive(false); }
+  async function handleDrop(e: DragEvent<HTMLDivElement>) {
+    e.preventDefault(); e.stopPropagation(); setDragActive(false);
+    const file = e.dataTransfer.files?.[0];
+    if (!file) return;
+    await processFile(file);
   }
 
   async function importRows() {
@@ -112,7 +145,6 @@ export default function CampaignsPage() {
     setMessage(`นำเข้า ${data.imported} campaign สำเร็จ`);
   }
 
-  // --- ลบข้อมูล ---
   async function deleteSelected(ids: string[], confirmMessage: string) {
     const validIds = ids.filter(Boolean);
     if (!validIds.length ||!window.confirm(confirmMessage)) return;
@@ -163,14 +195,14 @@ export default function CampaignsPage() {
   if (!authorized ||!user) return <main className="flex min-h-screen items-center justify-center bg-[#f4f1ea] text-sm text-slate-500">Checking access...</main>;
 
   return (
-    <div className="min-h-screen bg-[var(--background)] text-[var(--foreground)]">
+    <div className="min-h-screen bg-[#fcfaf7] text-zinc-900 dark:bg-zinc-950 dark:text-zinc-100">
       <TopMenu user={user} />
-      <main className="mx-auto max-w-7xl px-5 py-10 lg:px-8">
+      <main className="mx-auto max-w- px-5 py-10 lg:px-8">
         <div className="mb-8 flex flex-col justify-between gap-4 border-b border-zinc-200 pb-8 dark:border-zinc-700 sm:flex-row sm:items-end">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[#c8102e]">Google Ads / Campaigns</p>
-            <h1 className="mt-3 text-4xl font-semibold tracking-tight">Campaign data</h1>
-            <p className="mt-3 text-sm text-zinc-500 dark:text-zinc-400">อัปโหลดและวิเคราะห์ข้อมูลแคมเปญจาก Google Ads</p>
+            <p className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.2em] text-[#c8102e]"><Eye size={14} /> Google Ads / Video Campaigns</p>
+            <h1 className="mt-3 text-4xl font-bold tracking-tight">Campaign data - Video Ads</h1>
+            <p className="mt-3 text-sm text-zinc-500">ลากไฟล์ Google Ads Video Report มาวางได้เลย ระบบหา header แคมเปญ, งบประมาณ อัตโนมัติ</p>
           </div>
           <Link href="/dashboard" className="text-sm text-zinc-500 underline underline-offset-4 hover:text-zinc-800">Back to overview</Link>
         </div>
@@ -187,34 +219,48 @@ export default function CampaignsPage() {
           ))}
         </section>
 
-        <section className="rounded-2xl border border-dashed border-zinc-300 bg-white p-8 text-center shadow-sm dark:border-zinc-600 dark:bg-zinc-900">
-          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-red-50 dark:bg-red-950/30"><Upload className="text-[#c8102e]" size={20} /></div>
-          <p className="mt-3 text-base font-semibold">Upload campaign spreadsheet</p>
-          <p className="mt-1.5 text-sm text-zinc-500">ระบบจะค้นหา header แคมเปญ และ งบประมาณ แล้วตัดแถวที่ไม่ใช่ข้อมูลออก</p>
-          <label className="mt-5 inline-flex cursor-pointer rounded-full bg-[#c8102e] px-6 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-[#a50d26]">
-            Choose Excel file
-            <input className="sr-only" type="file" accept=".xlsx,.xls,.csv" onChange={handleFile} />
-          </label>
-          {fileName && <p className="mt-3 text-sm font-medium text-zinc-700 dark:text-zinc-300">ไฟล์: {fileName}</p>}
-          <p className="mt-3 text-sm text-zinc-500" role="status">{message}</p>
+        <section
+          onDragOver={handleDragOver}
+          onDragLeave={handleDragLeave}
+          onDrop={handleDrop}
+          className={`rounded-2xl border-2 border-dashed p-8 text-center shadow-sm transition-all ${dragActive? "border-[#c8102e] bg-red-50 dark:bg-red-950/20" : "border-zinc-300 bg-white dark:border-zinc-600 dark:bg-zinc-900"}`}
+        >
+          <div className="mx-auto flex flex-col items-center">
+            <div className={`flex h-14 w-14 items-center justify-center rounded-full ${dragActive? "bg-red-100" : "bg-red-50 dark:bg-red-950/30"}`}>
+              <Upload className="text-[#c8102e]" size={24} />
+            </div>
+            <p className="mt-3 text-base font-semibold">{dragActive? "วางไฟล์ตรงนี้เลย" : "Upload Google Ads Video spreadsheet"}</p>
+            <p className="mt-1.5 text-sm text-zinc-500">ลากไฟล์มาวางที่นี่ หรือคลิกเลือกไฟล์ - รองรับ.xlsx,.xls,.csv</p>
+            <label className="mt-5 inline-flex cursor-pointer rounded-full bg-[#c8102e] px-6 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-[#a50d26]">
+              Choose Excel file
+              <input className="sr-only" type="file" accept=".xlsx,.xls,.csv" onChange={handleFile} />
+            </label>
+            {fileName && (
+              <div className="mt-4 inline-flex items-center gap-2 rounded-full bg-zinc-100 px-4 py-2 text-sm dark:bg-zinc-800">
+                <FileSpreadsheet size={16} /> {fileName}
+                <button onClick={() => { setFileName(""); setPreviewRows([]); setMessage("ลากไฟล์มาวางได้เลย"); }} className="ml-1 rounded-full p-1 hover:bg-zinc-200"><X size={14} /></button>
+              </div>
+            )}
+            <p className="mt-3 text-sm text-zinc-500" role="status">{message}</p>
+          </div>
         </section>
 
         {previewRows.length > 0 && (
           <section className="mt-8 overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-700 dark:bg-zinc-900">
             <div className="flex flex-wrap items-center justify-between gap-3 border-b border-zinc-200 bg-amber-50/60 px-5 py-4 dark:border-zinc-700 dark:bg-amber-950/20">
               <h2 className="font-semibold">Preview ({previewRows.length} rows) - ยังไม่ได้บันทึก</h2>
-              <button onClick={importRows} className="inline-flex items-center rounded-full bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700"><CheckCircle2 className="mr-2" size={16} />Import campaigns</button>
+              <button onClick={importRows} className="inline-flex items-center rounded-full bg-emerald-600 px-5 py-2 text-sm font-semibold text-white hover:bg-emerald-700"><CheckCircle2 className="mr-2" size={16} />Import campaigns</button>
             </div>
             <div className="overflow-x-auto">
-              <table className="w-full table-fixed text-left text-sm">
+              <table className="w-full text-left text-sm">
                 <thead className="sticky top-0 z-10 bg-zinc-50 text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:bg-zinc-800">
-                  <tr>{campaignHeaders.map((header) => <th className={`px-3 py-3 ${getColumnStyle(header)}`} key={header} title={header}><span className="block truncate">{header}</span></th>)}</tr>
+                  <tr>{campaignHeaders.map((header) => <th style={getColumnStyle(header)} className="px-3 py-3" key={header} title={header}><span className="block truncate">{header}</span></th>)}</tr>
                 </thead>
                 <tbody>
                   {previewRows.map((row, index) => (
                     <tr className="border-t border-zinc-200 odd:bg-white even:bg-zinc-50/60 hover:bg-amber-50/60 dark:border-zinc-700 dark:odd:bg-zinc-900 dark:even:bg-zinc-800/40" key={index}>
                       {campaignHeaders.map((header) => (
-                        <td className={`px-3 py-2.5 align-top text-zinc-700 dark:text-zinc-300 ${getColumnStyle(header)}`} key={header}>
+                        <td style={getColumnStyle(header)} className="px-3 py-2.5 align-top text-zinc-700 dark:text-zinc-300" key={header}>
                           <span className="block truncate" title={String(row[header]?? "")}>{displayValue(row[header], header)}</span>
                         </td>
                       ))}
@@ -226,27 +272,19 @@ export default function CampaignsPage() {
           </section>
         )}
 
-        {/* Imported + ปุ่มลบ */}
         <section className="mt-8 overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-700 dark:bg-zinc-900">
           <div className="flex flex-col justify-between gap-3 border-b border-zinc-200 bg-zinc-50 px-5 py-4 dark:border-zinc-700 dark:bg-zinc-800 sm:flex-row sm:items-center">
             <div>
-              <h2 className="font-semibold">Imported campaigns</h2>
+              <h2 className="font-semibold">Imported campaigns - Video Ads</h2>
               <p className="mt-1 text-xs text-zinc-500">{rows.length} rows • เลือก {selectedIds.length} • Page {campaignPage}/{campaignPageCount}</p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
               {selectedIds.length > 0 && (
-                <button
-                  onClick={() => deleteSelected(selectedIds, `ต้องการลบ ${selectedIds.length} แถวที่เลือกหรือไม่?`)}
-                  className="inline-flex items-center gap-1.5 rounded-full bg-red-600 px-4 py-2 text-xs font-semibold text-white hover:bg-red-700"
-                >
+                <button onClick={() => deleteSelected(selectedIds, `ลบ ${selectedIds.length} แถวที่เลือกหรือไม่?`)} className="inline-flex items-center gap-1.5 rounded-full bg-red-600 px-4 py-2 text-xs font-semibold text-white hover:bg-red-700">
                   <Trash2 size={14} /> ลบที่เลือก ({selectedIds.length})
                 </button>
               )}
-              <button
-                onClick={() => deleteSelected(savedIds, "ต้องการลบข้อมูลทั้งหมดหรือไม่? การกระทำนี้ไม่สามารถย้อนกลับได้")}
-                disabled={!savedIds.length}
-                className="inline-flex items-center gap-1.5 rounded-full border border-red-200 bg-white px-4 py-2 text-xs font-semibold text-red-600 hover:bg-red-50 disabled:opacity-40 dark:border-red-900/50 dark:bg-zinc-900"
-              >
+              <button onClick={() => deleteSelected(savedIds, "ลบข้อมูลทั้งหมดหรือไม่? ไม่สามารถย้อนกลับได้")} disabled={!savedIds.length} className="inline-flex items-center gap-1.5 rounded-full border border-red-200 bg-white px-4 py-2 text-xs font-semibold text-red-600 hover:bg-red-50 disabled:opacity-40">
                 <Trash2 size={14} /> ลบทั้งหมด
               </button>
               <label className="ml-2 flex items-center gap-2 text-xs text-zinc-500">Rows
@@ -258,36 +296,33 @@ export default function CampaignsPage() {
           </div>
 
           <div className="overflow-x-auto">
-            <table className="w-full table-fixed text-left text-sm">
+            <table className="w-full text-left text-sm">
               <thead className="sticky top-0 z-10 bg-white text-xs font-semibold uppercase tracking-wide text-zinc-500 shadow-sm dark:bg-zinc-900">
                 <tr>
-                  <th className="w- px-3 py-3">
+                  <th style={{ width: 48 }} className="px-3 py-3">
                     <input type="checkbox" checked={allVisibleSelected} onChange={() => {
                       const visibleIds = visibleCampaignRows.map((r) => r._id).filter((id): id is string => Boolean(id));
-                      if (allVisibleSelected) {
-                        setSelectedIds((cur) => cur.filter((id) =>!visibleIds.includes(id)));
-                      } else {
-                        setSelectedIds((cur) => Array.from(new Set([...cur,...visibleIds])));
-                      }
-                    }} title={allVisibleSelected? "ยกเลิกเลือกหน้านี้" : "เลือกทั้งหมดหน้านี้"} />
+                      if (allVisibleSelected) setSelectedIds((cur) => cur.filter((id) =>!visibleIds.includes(id)));
+                      else setSelectedIds((cur) => Array.from(new Set([...cur,...visibleIds])));
+                    }} />
                   </th>
-                  {campaignHeaders.map((header) => <th className={`px-3 py-3 ${getColumnStyle(header)}`} key={header} title={header}><span className="block truncate">{header}</span></th>)}
-                  <th className="w- px-3 py-3 text-center">ลบ</th>
+                  {campaignHeaders.map((header) => <th style={getColumnStyle(header)} className="px-3 py-3" key={header} title={header}><span className="block truncate">{header}</span></th>)}
+                  <th style={{ width: 60 }} className="px-3 py-3 text-center">ลบ</th>
                 </tr>
               </thead>
               <tbody>
                 {visibleCampaignRows.map((row, index) => (
-                  <tr className="border-t border-zinc-200 odd:bg-white even:bg-zinc-50/50 hover:bg-zinc-50 dark:border-zinc-700 dark:odd:bg-zinc-900 dark:even:bg-zinc-800/40 dark:hover:bg-zinc-800" key={row._id || index}>
+                  <tr className="border-t border-zinc-200 odd:bg-white even:bg-zinc-50/50 hover:bg-zinc-50 dark:border-zinc-700 dark:odd:bg-zinc-900 dark:even:bg-zinc-800/40" key={row._id || index}>
                     <td className="px-3 py-2.5 text-center">
                       <input type="checkbox" checked={Boolean(row._id && selectedIds.includes(row._id))} onChange={() => row._id && toggleSelected(row._id)} />
                     </td>
                     {campaignHeaders.map((header) => (
-                      <td className={`px-3 py-2.5 align-top text-zinc-700 dark:text-zinc-300 ${getColumnStyle(header)}`} key={header}>
+                      <td style={getColumnStyle(header)} className="px-3 py-2.5 align-top text-zinc-700 dark:text-zinc-300" key={header}>
                         <span className="block truncate" title={String(row[header]?? "")}>{displayValue(row[header], header)}</span>
                       </td>
                     ))}
                     <td className="px-3 py-2.5 text-center">
-                      <button onClick={() => row._id && deleteSelected([row._id], "ต้องการลบแคมเปญนี้หรือไม่?")} className="rounded-full p-1.5 text-zinc-400 hover:bg-red-50 hover:text-red-600">
+                      <button onClick={() => row._id && deleteSelected([row._id], "ลบแคมเปญนี้หรือไม่?")} className="rounded-full p-1.5 text-zinc-400 hover:bg-red-50 hover:text-red-600">
                         <Trash2 size={16} />
                       </button>
                     </td>
@@ -295,22 +330,20 @@ export default function CampaignsPage() {
                 ))}
               </tbody>
             </table>
-            {!rows.length && <div className="px-5 py-16 text-center"><p className="text-sm text-zinc-500">ยังไม่มีข้อมูล campaign</p><p className="mt-1 text-xs text-zinc-400">อัปโหลดไฟล์ Excel ด้านบนเพื่อเริ่มต้น</p></div>}
+            {!rows.length && <div className="px-5 py-16 text-center"><p className="text-sm text-zinc-500">ยังไม่มีข้อมูล campaign</p><p className="mt-1 text-xs text-zinc-400">ลากไฟล์ Excel Google Ads Video มาวางด้านบน</p></div>}
           </div>
 
           <div className="flex flex-col gap-2 border-t border-zinc-200 bg-zinc-50 px-5 py-3 text-sm dark:border-zinc-700 dark:bg-zinc-800 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-center gap-3 text-xs text-zinc-500">
               <label className="flex items-center gap-2">
-                <input type="checkbox" checked={allSelected} onChange={() => {
-                  if (allSelected) setSelectedIds([]); else setSelectedIds(savedIds);
-                }} />
+                <input type="checkbox" checked={allSelected} onChange={() => { if (allSelected) setSelectedIds([]); else setSelectedIds(savedIds); }} />
                 เลือกทั้งหมด {savedIds.length} แถว
               </label>
               <span>Page {campaignPage} of {campaignPageCount} · {rows.length} rows</span>
             </div>
             <div className="flex gap-2">
-              <button className="rounded-full border border-zinc-300 bg-white px-4 py-1.5 text-xs font-medium disabled:opacity-40 dark:border-zinc-600 dark:bg-zinc-900" disabled={campaignPage === 1} onClick={() => setCampaignPage((p) => p - 1)}>Previous</button>
-              <button className="rounded-full border border-zinc-300 bg-white px-4 py-1.5 text-xs font-medium disabled:opacity-40 dark:border-zinc-600 dark:bg-zinc-900" disabled={campaignPage >= campaignPageCount} onClick={() => setCampaignPage((p) => p + 1)}>Next</button>
+              <button className="rounded-full border bg-white px-4 py-1.5 text-xs font-medium disabled:opacity-40" disabled={campaignPage === 1} onClick={() => setCampaignPage((p) => p - 1)}>Previous</button>
+              <button className="rounded-full border bg-white px-4 py-1.5 text-xs font-medium disabled:opacity-40" disabled={campaignPage >= campaignPageCount} onClick={() => setCampaignPage((p) => p + 1)}>Next</button>
             </div>
           </div>
         </section>
